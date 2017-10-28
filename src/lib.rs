@@ -25,7 +25,8 @@ pub struct Update {
     /// Optional. New incoming inline query
     pub inline_query: Option<InlineQuery>,
     /// Optional. The result of an inline query that was chosen by a user and sent
-    /// to their chat partner.
+    /// to their chat partner. Please see our documentation on the feedback
+    /// collecting for details on how to enable these updates for your bot.
     pub chosen_inline_result: Option<ChosenInlineResult>,
     /// Optional. New incoming callback query
     pub callback_query: Option<CallbackQuery>,
@@ -66,6 +67,8 @@ pub struct WebhookInfo {
 pub struct User {
     /// Unique identifier for this user or bot
     pub id: i64,
+    /// True, if this user is a bot
+    pub is_bot: bool,
     /// User‘s or bot’s first name
     pub first_name: String,
     /// Optional. User‘s or bot’s last name
@@ -98,6 +101,22 @@ pub struct Chat {
     pub last_name: Option<String>,
     /// Optional. True if a group has ‘All Members Are Admins’ enabled.
     pub all_members_are_administrators: Option<bool>,
+    /// Optional. Chat photo. Returned only in getChat.
+    pub photo: Option<ChatPhoto>,
+    /// Optional. Description, for supergroups and channel chats. Returned only in
+    /// getChat.
+    pub description: Option<String>,
+    /// Optional. Chat invite link, for supergroups and channel chats. Returned only
+    /// in getChat.
+    pub invite_link: Option<String>,
+    /// Optional. Pinned message, for supergroups. Returned only in getChat.
+    pub pinned_message: Option<Box<Message>>,
+    /// Optional. For supergroups, name of group sticker set. Returned only in
+    /// getChat.
+    pub sticker_set_name: Option<String>,
+    /// Optional. True, if the bot can change the group sticker set. Returned only
+    /// in getChat.
+    pub can_set_sticker_set: Option<bool>,
 }
 
 
@@ -106,7 +125,7 @@ pub struct Chat {
 pub struct Message {
     /// Unique message identifier inside this chat
     pub message_id: i64,
-    /// Optional. Sender, can be empty for messages sent to channels
+    /// Optional. Sender, empty for messages sent to channels
     pub from: Option<User>,
     /// Date the message was sent in Unix time
     pub date: i64,
@@ -114,12 +133,15 @@ pub struct Message {
     pub chat: Chat,
     /// Optional. For forwarded messages, sender of the original message
     pub forward_from: Option<User>,
-    /// Optional. For messages forwarded from a channel, information about the
+    /// Optional. For messages forwarded from channels, information about the
     /// original channel
     pub forward_from_chat: Option<Chat>,
-    /// Optional. For forwarded channel posts, identifier of the original message in
-    /// the channel
+    /// Optional. For messages forwarded from channels, identifier of the original
+    /// message in the channel
     pub forward_from_message_id: Option<i64>,
+    /// Optional. For messages forwarded from channels, signature of the post author
+    /// if present
+    pub forward_signature: Option<String>,
     /// Optional. For forwarded messages, date the original message was sent in Unix
     /// time
     pub forward_date: Option<i64>,
@@ -129,12 +151,17 @@ pub struct Message {
     pub reply_to_message: Option<Box<Message>>,
     /// Optional. Date the message was last edited in Unix time
     pub edit_date: Option<i64>,
+    /// Optional. Signature of the post author for messages in channels
+    pub author_signature: Option<String>,
     /// Optional. For text messages, the actual UTF-8 text of the message, 0-4096
     /// characters.
     pub text: Option<String>,
     /// Optional. For text messages, special entities like usernames, URLs, bot
     /// commands, etc. that appear in the text
     pub entities: Option<Vec<MessageEntity>>,
+    /// Optional. For messages with a caption, special entities like usernames,
+    /// URLs, bot commands, etc. that appear in the caption
+    pub caption_entities: Option<Vec<MessageEntity>>,
     /// Optional. Message is an audio file, information about the file
     pub audio: Option<Audio>,
     /// Optional. Message is a general file, information about the file
@@ -151,10 +178,8 @@ pub struct Message {
     pub voice: Option<Voice>,
     /// Optional. Message is a video note, information about the video message
     pub video_note: Option<VideoNote>,
-    /// Optional. New members that were added to the group or supergroup and
-    /// information about them (the bot itself may be one of these members)
-    pub new_chat_members: Option<Vec<User>>,
-    /// Optional. Caption for the document, photo or video, 0-200 characters
+    /// Optional. Caption for the audio, document, photo, video or voice, 0-200
+    /// characters
     pub caption: Option<String>,
     /// Optional. Message is a shared contact, information about the contact
     pub contact: Option<Contact>,
@@ -162,9 +187,9 @@ pub struct Message {
     pub location: Option<Location>,
     /// Optional. Message is a venue, information about the venue
     pub venue: Option<Venue>,
-    /// Optional. A new member was added to the group, information about them (this
-    /// member may be the bot itself)
-    pub new_chat_member: Option<User>,
+    /// Optional. New members that were added to the group or supergroup and
+    /// information about them (the bot itself may be one of these members)
+    pub new_chat_members: Option<Vec<User>>,
     /// Optional. A member was removed from the group, information about them (this
     /// member may be the bot itself)
     pub left_chat_member: Option<User>,
@@ -279,24 +304,6 @@ pub struct Document {
     pub file_name: Option<String>,
     /// Optional. MIME type of the file as defined by sender
     pub mime_type: Option<String>,
-    /// Optional. File size
-    pub file_size: Option<i64>,
-}
-
-
-/// This object represents a sticker.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub struct Sticker {
-    /// Unique identifier for this file
-    pub file_id: String,
-    /// Sticker width
-    pub width: i64,
-    /// Sticker height
-    pub height: i64,
-    /// Optional. Sticker thumbnail in .webp or .jpg format
-    pub thumb: Option<PhotoSize>,
-    /// Optional. Emoji associated with the sticker
-    pub emoji: Option<String>,
     /// Optional. File size
     pub file_size: Option<i64>,
 }
@@ -448,7 +455,7 @@ pub struct ReplyKeyboardMarkup {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct KeyboardButton {
     /// Text of the button. If none of the optional fields are used, it will be sent
-    /// to the bot as a message when the button is pressed
+    /// as a message when the button is pressed
     pub text: String,
     /// Optional. If True, the user's phone number will be sent as a contact when
     /// the button is pressed. Available in private chats only
@@ -575,18 +582,74 @@ pub struct ForceReply {
 }
 
 
-/// This object contains information about one member of the chat.
+/// This object represents a chat photo.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct ChatPhoto {
+    /// Unique file identifier of small (160x160) chat photo. This file_id can be
+    /// used only for photo download.
+    pub small_file_id: String,
+    /// Unique file identifier of big (640x640) chat photo. This file_id can be used
+    /// only for photo download.
+    pub big_file_id: String,
+}
+
+
+/// This object contains information about one member of a chat.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct ChatMember {
     /// Information about the user
     pub user: User,
     /// The member's status in the chat. Can be “creator”, “administrator”,
-    /// “member”, “left” or “kicked”
+    /// “member”, “restricted”, “left” or “kicked”
     pub status: String,
+    /// Optional. Restictred and kicked only. Date when restrictions will be lifted
+    /// for this user, unix time
+    pub until_date: Option<i64>,
+    /// Optional. Administrators only. True, if the bot is allowed to edit
+    /// administrator privileges of that user
+    pub can_be_edited: Option<bool>,
+    /// Optional. Administrators only. True, if the administrator can change the
+    /// chat title, photo and other settings
+    pub can_change_info: Option<bool>,
+    /// Optional. Administrators only. True, if the administrator can post in the
+    /// channel, channels only
+    pub can_post_messages: Option<bool>,
+    /// Optional. Administrators only. True, if the administrator can edit messages
+    /// of other users, channels only
+    pub can_edit_messages: Option<bool>,
+    /// Optional. Administrators only. True, if the administrator can delete
+    /// messages of other users
+    pub can_delete_messages: Option<bool>,
+    /// Optional. Administrators only. True, if the administrator can invite new
+    /// users to the chat
+    pub can_invite_users: Option<bool>,
+    /// Optional. Administrators only. True, if the administrator can restrict, ban
+    /// or unban chat members
+    pub can_restrict_members: Option<bool>,
+    /// Optional. Administrators only. True, if the administrator can pin messages,
+    /// supergroups only
+    pub can_pin_messages: Option<bool>,
+    /// Optional. Administrators only. True, if the administrator can add new
+    /// administrators with a subset of his own privileges or demote administrators
+    /// that he has promoted, directly or indirectly (promoted by administrators
+    /// that were appointed by the user)
+    pub can_promote_members: Option<bool>,
+    /// Optional. Restricted only. True, if the user can send text messages,
+    /// contacts, locations and venues
+    pub can_send_messages: Option<bool>,
+    /// Optional. Restricted only. True, if the user can send audios, documents,
+    /// photos, videos, video notes and voice notes, implies can_send_messages
+    pub can_send_media_messages: Option<bool>,
+    /// Optional. Restricted only. True, if the user can send animations, games,
+    /// stickers and use inline bots, implies can_send_media_messages
+    pub can_send_other_messages: Option<bool>,
+    /// Optional. Restricted only. True, if user may add web page previews to his
+    /// messages, implies can_send_media_messages
+    pub can_add_web_page_previews: Option<bool>,
 }
 
 
-/// Contains information about why a request was unsuccessfull.
+/// Contains information about why a request was unsuccessful.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct ResponseParameters {
     /// Optional. The group has been migrated to a supergroup with the specified
@@ -598,6 +661,62 @@ pub struct ResponseParameters {
     /// Optional. In case of exceeding flood control, the number of seconds left to
     /// wait before the request can be repeated
     pub retry_after: Option<i64>,
+}
+
+
+/// This object represents a sticker.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct Sticker {
+    /// Unique identifier for this file
+    pub file_id: String,
+    /// Sticker width
+    pub width: i64,
+    /// Sticker height
+    pub height: i64,
+    /// Optional. Sticker thumbnail in the .webp or .jpg format
+    pub thumb: Option<PhotoSize>,
+    /// Optional. Emoji associated with the sticker
+    pub emoji: Option<String>,
+    /// Optional. Name of the sticker set to which the sticker belongs
+    pub set_name: Option<String>,
+    /// Optional. For mask stickers, the position where the mask should be placed
+    pub mask_position: Option<MaskPosition>,
+    /// Optional. File size
+    pub file_size: Option<i64>,
+}
+
+
+/// This object represents a sticker set.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct StickerSet {
+    /// Sticker set name
+    pub name: String,
+    /// Sticker set title
+    pub title: String,
+    /// True, if the sticker set contains masks
+    pub contains_masks: bool,
+    /// List of all set stickers
+    pub stickers: Vec<Sticker>,
+}
+
+
+/// This object describes the position on faces where a mask should be placed by
+/// default.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct MaskPosition {
+    /// The part of the face relative to which the mask should be placed. One of
+    /// “forehead”, “eyes”, “mouth”, or “chin”.
+    pub point: String,
+    /// Shift by X-axis measured in widths of the mask scaled to the face size, from
+    /// left to right. For example, choosing -1.0 will place mask just to the left
+    /// of the default mask position.
+    pub x_shift: f64,
+    /// Shift by Y-axis measured in heights of the mask scaled to the face size,
+    /// from top to bottom. For example, 1.0 will place the mask just below the
+    /// default mask position.
+    pub y_shift: f64,
+    /// Mask scaling coefficient. For example, 2.0 means double size.
+    pub scale: f64,
 }
 
 
@@ -801,7 +920,9 @@ pub struct InlineQueryResultVideo {
     pub description: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
-    /// Optional. Content of the message to be sent instead of the video
+    /// Optional. Content of the message to be sent instead of the video. This field
+    /// is required if InlineQueryResultVideo is used to send an HTML-page as a
+    /// result (e.g., a YouTube video).
     pub input_message_content: Option<InputMessageContent>,
 }
 
@@ -910,6 +1031,9 @@ pub struct InlineQueryResultLocation {
     pub longitude: f64,
     /// Location title
     pub title: String,
+    /// Optional. Period in seconds for which the location can be updated, should be
+    /// between 60 and 86400.
+    pub live_period: Option<i64>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the location
@@ -1226,6 +1350,9 @@ pub struct InputLocationMessageContent {
     pub latitude: f64,
     /// Longitude of the location in degrees
     pub longitude: f64,
+    /// Optional. Period in seconds for which the location can be updated, should be
+    /// between 60 and 86400.
+    pub live_period: Option<i64>,
 }
 
 
