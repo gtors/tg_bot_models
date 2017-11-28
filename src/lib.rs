@@ -151,6 +151,9 @@ pub struct Message {
     pub reply_to_message: Option<Box<Message>>,
     /// Optional. Date the message was last edited in Unix time
     pub edit_date: Option<i64>,
+    /// Optional. The unique identifier of a media message group this message
+    /// belongs to
+    pub media_group_id: Option<String>,
     /// Optional. Signature of the post author for messages in channels
     pub author_signature: Option<String>,
     /// Optional. For text messages, the actual UTF-8 text of the message, 0-4096
@@ -615,7 +618,7 @@ pub struct ChatMember {
     /// channel, channels only
     pub can_post_messages: Option<bool>,
     /// Optional. Administrators only. True, if the administrator can edit messages
-    /// of other users, channels only
+    /// of other users and can pin messages, channels only
     pub can_edit_messages: Option<bool>,
     /// Optional. Administrators only. True, if the administrator can delete
     /// messages of other users
@@ -661,6 +664,55 @@ pub struct ResponseParameters {
     /// Optional. In case of exceeding flood control, the number of seconds left to
     /// wait before the request can be repeated
     pub retry_after: Option<i64>,
+}
+
+
+/// This object represents the content of a media message to be sent. It should be
+/// one of
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub enum InputMedia {
+    InputMediaPhoto(InputMediaPhoto),
+    InputMediaVideo(InputMediaVideo),
+}
+
+
+/// Represents a photo to be sent.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct InputMediaPhoto {
+    /// Type of the result, must be photo
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// File to send. Pass a file_id to send a file that exists on the Telegram
+    /// servers (recommended), pass an HTTP URL for Telegram to get a file from the
+    /// Internet, or pass "attach://<file_attach_name>" to upload a new one using
+    /// multipart/form-data under <file_attach_name> name. More info on Sending
+    /// Files »
+    pub media: String,
+    /// Optional. Caption of the photo to be sent, 0-200 characters
+    pub caption: Option<String>,
+}
+
+
+/// Represents a video to be sent.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct InputMediaVideo {
+    /// Type of the result, must be video
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// File to send. Pass a file_id to send a file that exists on the Telegram
+    /// servers (recommended), pass an HTTP URL for Telegram to get a file from the
+    /// Internet, or pass "attach://<file_attach_name>" to upload a new one using
+    /// multipart/form-data under <file_attach_name> name. More info on Sending
+    /// Files »
+    pub media: String,
+    /// Optional. Caption of the video to be sent, 0-200 characters
+    pub caption: Option<String>,
+    /// Optional. Video width
+    pub width: Option<i64>,
+    /// Optional. Video height
+    pub height: Option<i64>,
+    /// Optional. Video duration
+    pub duration: Option<i64>,
 }
 
 
