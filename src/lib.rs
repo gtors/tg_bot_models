@@ -4,6 +4,7 @@ extern crate serde;
 extern crate serde_json;
 
 
+
 /// This object represents an incoming update.At most one of the optional parameters
 /// can be present in any given update.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -11,7 +12,9 @@ pub struct Update {
     /// The update‘s unique identifier. Update identifiers start from a certain
     /// positive number and increase sequentially. This ID becomes especially handy
     /// if you’re using Webhooks, since it allows you to ignore repeated updates or
-    /// to restore the correct update sequence, should they get out of order.
+    /// to restore the correct update sequence, should they get out of order. If
+    /// there are no new updates for at least a week, then identifier of the next
+    /// update will be chosen randomly instead of sequentially.
     pub update_id: i64,
     /// Optional. New incoming message of any kind — text, photo, sticker, etc.
     pub message: Option<Message>,
@@ -109,7 +112,8 @@ pub struct Chat {
     /// Optional. Chat invite link, for supergroups and channel chats. Returned only
     /// in getChat.
     pub invite_link: Option<String>,
-    /// Optional. Pinned message, for supergroups. Returned only in getChat.
+    /// Optional. Pinned message, for supergroups and channel chats. Returned only
+    /// in getChat.
     pub pinned_message: Option<Box<Message>>,
     /// Optional. For supergroups, name of group sticker set. Returned only in
     /// getChat.
@@ -169,6 +173,10 @@ pub struct Message {
     pub audio: Option<Audio>,
     /// Optional. Message is a general file, information about the file
     pub document: Option<Document>,
+    /// Optional. Message is an animation, information about the animation. For
+    /// backward compatibility, when this field is set, the document field will also
+    /// be set
+    pub animation: Option<Animation>,
     /// Optional. Message is a game, information about the game. More about games »
     pub game: Option<Game>,
     /// Optional. Message is a photo, available sizes of the photo
@@ -237,6 +245,11 @@ pub struct Message {
     /// Optional. Message is a service message about a successful payment,
     /// information about the payment. More about payments »
     pub successful_payment: Option<SuccessfulPayment>,
+    /// Optional. The domain name of the website on which the user has logged in.
+    /// More about Telegram Login »
+    pub connected_website: Option<String>,
+    /// Optional. Telegram Passport data
+    pub passport_data: Option<PassportData>,
 }
 
 
@@ -244,10 +257,10 @@ pub struct Message {
 /// hashtags, usernames, URLs, etc.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct MessageEntity {
-    /// Type of the entity. Can be mention (@username), hashtag, bot_command, url,
-    /// email, bold (bold text), italic (italic text), code (monowidth string), pre
-    /// (monowidth block), text_link (for clickable text URLs), text_mention (for
-    /// users without usernames)
+    /// Type of the entity. Can be mention (@username), hashtag, cashtag,
+    /// bot_command, url, email, phone_number, bold (bold text), italic (italic
+    /// text), code (monowidth string), pre (monowidth block), text_link (for
+    /// clickable text URLs), text_mention (for users without usernames)
     #[serde(rename = "type")]
     pub ty: String,
     /// Offset in UTF-16 code units to the start of the entity
@@ -292,6 +305,8 @@ pub struct Audio {
     pub mime_type: Option<String>,
     /// Optional. File size
     pub file_size: Option<i64>,
+    /// Optional. Thumbnail of the album cover to which the music file belongs
+    pub thumb: Option<PhotoSize>,
 }
 
 
@@ -326,6 +341,29 @@ pub struct Video {
     /// Optional. Video thumbnail
     pub thumb: Option<PhotoSize>,
     /// Optional. Mime type of a file as defined by sender
+    pub mime_type: Option<String>,
+    /// Optional. File size
+    pub file_size: Option<i64>,
+}
+
+
+/// This object represents an animation file (GIF or H.264/MPEG-4 AVC video without
+/// sound).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct Animation {
+    /// Unique file identifier
+    pub file_id: String,
+    /// Video width as defined by sender
+    pub width: i64,
+    /// Video height as defined by sender
+    pub height: i64,
+    /// Duration of the video in seconds as defined by sender
+    pub duration: i64,
+    /// Optional. Animation thumbnail as defined by sender
+    pub thumb: Option<PhotoSize>,
+    /// Optional. Original animation filename as defined by sender
+    pub file_name: Option<String>,
+    /// Optional. MIME type of the file as defined by sender
     pub mime_type: Option<String>,
     /// Optional. File size
     pub file_size: Option<i64>,
@@ -373,6 +411,8 @@ pub struct Contact {
     pub last_name: Option<String>,
     /// Optional. Contact's user identifier in Telegram
     pub user_id: Option<i64>,
+    /// Optional. Additional data about the contact in the form of a vCard
+    pub vcard: Option<String>,
 }
 
 
@@ -397,6 +437,10 @@ pub struct Venue {
     pub address: String,
     /// Optional. Foursquare identifier of the venue
     pub foursquare_id: Option<String>,
+    /// Optional. Foursquare type of the venue. (For example,
+    /// “arts_entertainment/default”, “arts_entertainment/aquarium” or
+    /// “food/icecream”.)
+    pub foursquare_type: Option<String>,
 }
 
 
@@ -507,7 +551,7 @@ pub struct InlineKeyboardMarkup {
 pub struct InlineKeyboardButton {
     /// Label text on the button
     pub text: String,
-    /// Optional. HTTP url to be opened when button is pressed
+    /// Optional. HTTP or tg:// url to be opened when button is pressed
     pub url: Option<String>,
     /// Optional. Data to be sent in a callback query to the bot when button is
     /// pressed, 1-64 bytes
@@ -605,7 +649,7 @@ pub struct ChatMember {
     /// The member's status in the chat. Can be “creator”, “administrator”,
     /// “member”, “restricted”, “left” or “kicked”
     pub status: String,
-    /// Optional. Restictred and kicked only. Date when restrictions will be lifted
+    /// Optional. Restricted and kicked only. Date when restrictions will be lifted
     /// for this user, unix time
     pub until_date: Option<i64>,
     /// Optional. Administrators only. True, if the bot is allowed to edit
@@ -671,6 +715,9 @@ pub struct ResponseParameters {
 /// one of
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum InputMedia {
+    InputMediaAnimation(InputMediaAnimation),
+    InputMediaDocument(InputMediaDocument),
+    InputMediaAudio(InputMediaAudio),
     InputMediaPhoto(InputMediaPhoto),
     InputMediaVideo(InputMediaVideo),
 }
@@ -684,12 +731,15 @@ pub struct InputMediaPhoto {
     pub ty: String,
     /// File to send. Pass a file_id to send a file that exists on the Telegram
     /// servers (recommended), pass an HTTP URL for Telegram to get a file from the
-    /// Internet, or pass "attach://<file_attach_name>" to upload a new one using
+    /// Internet, or pass “attach://<file_attach_name>” to upload a new one using
     /// multipart/form-data under <file_attach_name> name. More info on Sending
     /// Files »
     pub media: String,
     /// Optional. Caption of the photo to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
 }
 
 
@@ -701,18 +751,124 @@ pub struct InputMediaVideo {
     pub ty: String,
     /// File to send. Pass a file_id to send a file that exists on the Telegram
     /// servers (recommended), pass an HTTP URL for Telegram to get a file from the
-    /// Internet, or pass "attach://<file_attach_name>" to upload a new one using
+    /// Internet, or pass “attach://<file_attach_name>” to upload a new one using
     /// multipart/form-data under <file_attach_name> name. More info on Sending
     /// Files »
     pub media: String,
+    /// Optional. Thumbnail of the file sent. The thumbnail should be in JPEG format
+    /// and less than 200 kB in size. A thumbnail‘s width and height should not
+    /// exceed 90. Ignored if the file is not uploaded using multipart/form-data.
+    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
+    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    pub thumb: Option<String>,
     /// Optional. Caption of the video to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Video width
     pub width: Option<i64>,
     /// Optional. Video height
     pub height: Option<i64>,
     /// Optional. Video duration
     pub duration: Option<i64>,
+    /// Optional. Pass True, if the uploaded video is suitable for streaming
+    pub supports_streaming: Option<bool>,
+}
+
+
+/// Represents an animation file (GIF or H.264/MPEG-4 AVC video without sound) to be
+/// sent.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct InputMediaAnimation {
+    /// Type of the result, must be animation
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// File to send. Pass a file_id to send a file that exists on the Telegram
+    /// servers (recommended), pass an HTTP URL for Telegram to get a file from the
+    /// Internet, or pass “attach://<file_attach_name>” to upload a new one using
+    /// multipart/form-data under <file_attach_name> name. More info on Sending
+    /// Files »
+    pub media: String,
+    /// Optional. Thumbnail of the file sent. The thumbnail should be in JPEG format
+    /// and less than 200 kB in size. A thumbnail‘s width and height should not
+    /// exceed 90. Ignored if the file is not uploaded using multipart/form-data.
+    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
+    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    pub thumb: Option<String>,
+    /// Optional. Caption of the animation to be sent, 0-200 characters
+    pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
+    /// Optional. Animation width
+    pub width: Option<i64>,
+    /// Optional. Animation height
+    pub height: Option<i64>,
+    /// Optional. Animation duration
+    pub duration: Option<i64>,
+}
+
+
+/// Represents an audio file to be treated as music to be sent.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct InputMediaAudio {
+    /// Type of the result, must be audio
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// File to send. Pass a file_id to send a file that exists on the Telegram
+    /// servers (recommended), pass an HTTP URL for Telegram to get a file from the
+    /// Internet, or pass “attach://<file_attach_name>” to upload a new one using
+    /// multipart/form-data under <file_attach_name> name. More info on Sending
+    /// Files »
+    pub media: String,
+    /// Optional. Thumbnail of the file sent. The thumbnail should be in JPEG format
+    /// and less than 200 kB in size. A thumbnail‘s width and height should not
+    /// exceed 90. Ignored if the file is not uploaded using multipart/form-data.
+    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
+    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    pub thumb: Option<String>,
+    /// Optional. Caption of the audio to be sent, 0-200 characters
+    pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
+    /// Optional. Duration of the audio in seconds
+    pub duration: Option<i64>,
+    /// Optional. Performer of the audio
+    pub performer: Option<String>,
+    /// Optional. Title of the audio
+    pub title: Option<String>,
+}
+
+
+/// Represents a general file to be sent.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct InputMediaDocument {
+    /// Type of the result, must be document
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// File to send. Pass a file_id to send a file that exists on the Telegram
+    /// servers (recommended), pass an HTTP URL for Telegram to get a file from the
+    /// Internet, or pass “attach://<file_attach_name>” to upload a new one using
+    /// multipart/form-data under <file_attach_name> name. More info on Sending
+    /// Files »
+    pub media: String,
+    /// Optional. Thumbnail of the file sent. The thumbnail should be in JPEG format
+    /// and less than 200 kB in size. A thumbnail‘s width and height should not
+    /// exceed 90. Ignored if the file is not uploaded using multipart/form-data.
+    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
+    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    pub thumb: Option<String>,
+    /// Optional. Caption of the document to be sent, 0-200 characters
+    pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
 }
 
 
@@ -870,6 +1026,9 @@ pub struct InlineQueryResultPhoto {
     pub description: Option<String>,
     /// Optional. Caption of the photo to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the photo
@@ -902,6 +1061,9 @@ pub struct InlineQueryResultGif {
     pub title: Option<String>,
     /// Optional. Caption of the GIF file to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the GIF animation
@@ -934,6 +1096,9 @@ pub struct InlineQueryResultMpeg4Gif {
     pub title: Option<String>,
     /// Optional. Caption of the MPEG-4 file to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the video animation
@@ -962,6 +1127,9 @@ pub struct InlineQueryResultVideo {
     pub title: String,
     /// Optional. Caption of the video to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Video width
     pub video_width: Option<i64>,
     /// Optional. Video height
@@ -995,6 +1163,9 @@ pub struct InlineQueryResultAudio {
     pub title: String,
     /// Optional. Caption, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Performer
     pub performer: Option<String>,
     /// Optional. Audio duration in seconds
@@ -1023,6 +1194,9 @@ pub struct InlineQueryResultVoice {
     pub title: String,
     /// Optional. Caption, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Recording duration in seconds
     pub voice_duration: Option<i64>,
     /// Optional. Inline keyboard attached to the message
@@ -1047,6 +1221,9 @@ pub struct InlineQueryResultDocument {
     pub title: String,
     /// Optional. Caption of the document to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// A valid URL for the file
     pub document_url: String,
     /// Mime type of the content of the file, either “application/pdf” or
@@ -1119,6 +1296,10 @@ pub struct InlineQueryResultVenue {
     pub address: String,
     /// Optional. Foursquare identifier of the venue if known
     pub foursquare_id: Option<String>,
+    /// Optional. Foursquare type of the venue, if known. (For example,
+    /// “arts_entertainment/default”, “arts_entertainment/aquarium” or
+    /// “food/icecream”.)
+    pub foursquare_type: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the venue
@@ -1148,6 +1329,9 @@ pub struct InlineQueryResultContact {
     pub first_name: String,
     /// Optional. Contact's last name
     pub last_name: Option<String>,
+    /// Optional. Additional data about the contact in the form of a vCard, 0-2048
+    /// bytes
+    pub vcard: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the contact
@@ -1195,6 +1379,9 @@ pub struct InlineQueryResultCachedPhoto {
     pub description: Option<String>,
     /// Optional. Caption of the photo to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the photo
@@ -1219,6 +1406,9 @@ pub struct InlineQueryResultCachedGif {
     pub title: Option<String>,
     /// Optional. Caption of the GIF file to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the GIF animation
@@ -1244,6 +1434,9 @@ pub struct InlineQueryResultCachedMpeg4Gif {
     pub title: Option<String>,
     /// Optional. Caption of the MPEG-4 file to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the video animation
@@ -1290,6 +1483,9 @@ pub struct InlineQueryResultCachedDocument {
     pub description: Option<String>,
     /// Optional. Caption of the document to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the file
@@ -1316,6 +1512,9 @@ pub struct InlineQueryResultCachedVideo {
     pub description: Option<String>,
     /// Optional. Caption of the video to be sent, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the video
@@ -1340,6 +1539,9 @@ pub struct InlineQueryResultCachedVoice {
     pub title: String,
     /// Optional. Caption, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the voice message
@@ -1362,6 +1564,9 @@ pub struct InlineQueryResultCachedAudio {
     pub audio_file_id: String,
     /// Optional. Caption, 0-200 characters
     pub caption: Option<String>,
+    /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
+    /// italic, fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
     /// Optional. Inline keyboard attached to the message
     pub reply_markup: Option<InlineKeyboardMarkup>,
     /// Optional. Content of the message to be sent instead of the audio
@@ -1422,6 +1627,10 @@ pub struct InputVenueMessageContent {
     pub address: String,
     /// Optional. Foursquare identifier of the venue, if known
     pub foursquare_id: Option<String>,
+    /// Optional. Foursquare type of the venue, if known. (For example,
+    /// “arts_entertainment/default”, “arts_entertainment/aquarium” or
+    /// “food/icecream”.)
+    pub foursquare_type: Option<String>,
 }
 
 
@@ -1435,6 +1644,9 @@ pub struct InputContactMessageContent {
     pub first_name: String,
     /// Optional. Contact's last name
     pub last_name: Option<String>,
+    /// Optional. Additional data about the contact in the form of a vCard, 0-2048
+    /// bytes
+    pub vcard: Option<String>,
 }
 
 
@@ -1593,6 +1805,210 @@ pub struct PreCheckoutQuery {
 }
 
 
+/// Contains information about Telegram Passport data shared with the bot by the
+/// user.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportData {
+    /// Array with information about documents and other Telegram Passport elements
+    /// that was shared with the bot
+    pub data: Vec<EncryptedPassportElement>,
+    /// Encrypted credentials required to decrypt the data
+    pub credentials: EncryptedCredentials,
+}
+
+
+/// This object represents a file uploaded to Telegram Passport. Currently all
+/// Telegram Passport files are in JPEG format when decrypted and don't exceed 10MB.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportFile {
+    /// Unique identifier for this file
+    pub file_id: String,
+    /// File size
+    pub file_size: i64,
+    /// Unix time when the file was uploaded
+    pub file_date: i64,
+}
+
+
+/// Contains information about documents or other Telegram Passport elements shared
+/// with the bot by the user.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct EncryptedPassportElement {
+    /// Element type. One of “personal_details”, “passport”, “driver_license”,
+    /// “identity_card”, “internal_passport”, “address”, “utility_bill”,
+    /// “bank_statement”, “rental_agreement”, “passport_registration”,
+    /// “temporary_registration”, “phone_number”, “email”.
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// Optional. Base64-encoded encrypted Telegram Passport element data provided
+    /// by the user, available for “personal_details”, “passport”, “driver_license”,
+    /// “identity_card”, “identity_passport” and “address” types. Can be decrypted
+    /// and verified using the accompanying EncryptedCredentials.
+    pub data: Option<String>,
+    /// Optional. User's verified phone number, available only for “phone_number”
+    /// type
+    pub phone_number: Option<String>,
+    /// Optional. User's verified email address, available only for “email” type
+    pub email: Option<String>,
+    /// Optional. Array of encrypted files with documents provided by the user,
+    /// available for “utility_bill”, “bank_statement”, “rental_agreement”,
+    /// “passport_registration” and “temporary_registration” types. Files can be
+    /// decrypted and verified using the accompanying EncryptedCredentials.
+    pub files: Option<Vec<PassportFile>>,
+    /// Optional. Encrypted file with the front side of the document, provided by
+    /// the user. Available for “passport”, “driver_license”, “identity_card” and
+    /// “internal_passport”. The file can be decrypted and verified using the
+    /// accompanying EncryptedCredentials.
+    pub front_side: Option<PassportFile>,
+    /// Optional. Encrypted file with the reverse side of the document, provided by
+    /// the user. Available for “driver_license” and “identity_card”. The file can
+    /// be decrypted and verified using the accompanying EncryptedCredentials.
+    pub reverse_side: Option<PassportFile>,
+    /// Optional. Encrypted file with the selfie of the user holding a document,
+    /// provided by the user; available for “passport”, “driver_license”,
+    /// “identity_card” and “internal_passport”. The file can be decrypted and
+    /// verified using the accompanying EncryptedCredentials.
+    pub selfie: Option<PassportFile>,
+}
+
+
+/// Contains data required for decrypting and authenticating
+/// EncryptedPassportElement. See the Telegram Passport Documentation for a complete
+/// description of the data decryption and authentication processes.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct EncryptedCredentials {
+    /// Base64-encoded encrypted JSON-serialized data with unique user's payload,
+    /// data hashes and secrets required for EncryptedPassportElement decryption and
+    /// authentication
+    pub data: String,
+    /// Base64-encoded data hash for data authentication
+    pub hash: String,
+    /// Base64-encoded secret, encrypted with the bot's public RSA key, required for
+    /// data decryption
+    pub secret: String,
+}
+
+
+/// This object represents an error in the Telegram Passport element which was
+/// submitted that should be resolved by the user. It should be one of:
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub enum PassportElementError {
+    PassportElementErrorDataField(PassportElementErrorDataField),
+    PassportElementErrorFrontSide(PassportElementErrorFrontSide),
+    PassportElementErrorReverseSide(PassportElementErrorReverseSide),
+    PassportElementErrorSelfie(PassportElementErrorSelfie),
+    PassportElementErrorFile(PassportElementErrorFile),
+    PassportElementErrorFiles(PassportElementErrorFiles),
+}
+
+
+/// Represents an issue in one of the data fields that was provided by the user. The
+/// error is considered resolved when the field's value changes.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportElementErrorDataField {
+    /// Error source, must be data
+    pub source: String,
+    /// The section of the user's Telegram Passport which has the error, one of
+    /// “personal_details”, “passport”, “driver_license”, “identity_card”,
+    /// “internal_passport”, “address”
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// Name of the data field which has the error
+    pub field_name: String,
+    /// Base64-encoded data hash
+    pub data_hash: String,
+    /// Error message
+    pub message: String,
+}
+
+
+/// Represents an issue with the front side of a document. The error is considered
+/// resolved when the file with the front side of the document changes.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportElementErrorFrontSide {
+    /// Error source, must be front_side
+    pub source: String,
+    /// The section of the user's Telegram Passport which has the issue, one of
+    /// “passport”, “driver_license”, “identity_card”, “internal_passport”
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// Base64-encoded hash of the file with the front side of the document
+    pub file_hash: String,
+    /// Error message
+    pub message: String,
+}
+
+
+/// Represents an issue with the reverse side of a document. The error is considered
+/// resolved when the file with reverse side of the document changes.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportElementErrorReverseSide {
+    /// Error source, must be reverse_side
+    pub source: String,
+    /// The section of the user's Telegram Passport which has the issue, one of
+    /// “driver_license”, “identity_card”
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// Base64-encoded hash of the file with the reverse side of the document
+    pub file_hash: String,
+    /// Error message
+    pub message: String,
+}
+
+
+/// Represents an issue with the selfie with a document. The error is considered
+/// resolved when the file with the selfie changes.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportElementErrorSelfie {
+    /// Error source, must be selfie
+    pub source: String,
+    /// The section of the user's Telegram Passport which has the issue, one of
+    /// “passport”, “driver_license”, “identity_card”, “internal_passport”
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// Base64-encoded hash of the file with the selfie
+    pub file_hash: String,
+    /// Error message
+    pub message: String,
+}
+
+
+/// Represents an issue with a document scan. The error is considered resolved when
+/// the file with the document scan changes.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportElementErrorFile {
+    /// Error source, must be file
+    pub source: String,
+    /// The section of the user's Telegram Passport which has the issue, one of
+    /// “utility_bill”, “bank_statement”, “rental_agreement”,
+    /// “passport_registration”, “temporary_registration”
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// Base64-encoded file hash
+    pub file_hash: String,
+    /// Error message
+    pub message: String,
+}
+
+
+/// Represents an issue with a list of scans. The error is considered resolved when
+/// the list of files containing the scans changes.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportElementErrorFiles {
+    /// Error source, must be files
+    pub source: String,
+    /// The section of the user's Telegram Passport which has the issue, one of
+    /// “utility_bill”, “bank_statement”, “rental_agreement”,
+    /// “passport_registration”, “temporary_registration”
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// List of base64-encoded file hashes
+    pub file_hashes: Vec<String>,
+    /// Error message
+    pub message: String,
+}
+
+
 /// This object represents a game. Use BotFather to create and edit games, their
 /// short names will act as unique identifiers.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -1617,24 +2033,6 @@ pub struct Game {
 }
 
 
-/// You can provide an animation for your game so that it looks stylish in chats
-/// (check out Lumberjack for an example). This object represents an animation file
-/// to be displayed in the message containing a game.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub struct Animation {
-    /// Unique file identifier
-    pub file_id: String,
-    /// Optional. Animation thumbnail as defined by sender
-    pub thumb: Option<PhotoSize>,
-    /// Optional. Original animation filename as defined by sender
-    pub file_name: Option<String>,
-    /// Optional. MIME type of the file as defined by sender
-    pub mime_type: Option<String>,
-    /// Optional. File size
-    pub file_size: Option<i64>,
-}
-
-
 /// This object represents one row of the high scores table for a game.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct GameHighScore {
@@ -1645,3 +2043,1283 @@ pub struct GameHighScore {
     /// Score
     pub score: i64,
 }
+
+
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub enum PolymorphChatId {
+    Integer(i64),
+    String(String),
+}
+
+
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub enum PolymorphReplyMarkup {
+    InlineKeyboardMarkup(InlineKeyboardMarkup),
+    ReplyKeyboardMarkup(ReplyKeyboardMarkup),
+    ReplyKeyboardRemove(ReplyKeyboardRemove),
+    ForceReply(ForceReply),
+}
+
+
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub enum PolymorphFromChatId {
+    Integer(i64),
+    String(String),
+}/// Use this method to receive incoming updates using long polling (wiki). An Array
+/// of Update objects is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetUpdates {
+    /// Identifier of the first update to be returned. Must be greater by one than
+    /// the highest among the identifiers of previously received updates. By
+    /// default, updates starting with the earliest unconfirmed update are returned.
+    /// An update is considered confirmed as soon as getUpdates is called with an
+    /// offset higher than its update_id. The negative offset can be specified to
+    /// retrieve updates starting from -offset update from the end of the updates
+    /// queue. All previous updates will forgotten.
+    pub offset: Option<i64>,
+    /// Limits the number of updates to be retrieved. Values between 1—100 are
+    /// accepted. Defaults to 100.
+    pub limit: Option<i64>,
+    /// Timeout in seconds for long polling. Defaults to 0, i.e. usual short
+    /// polling. Should be positive, short polling should be used for testing
+    /// purposes only.
+    pub timeout: Option<i64>,
+    /// List the types of updates you want your bot to receive. For example, specify
+    /// [“message”, “edited_channel_post”, “callback_query”] to only receive updates
+    /// of these types. See Update for a complete list of available update types.
+    /// Specify an empty list to receive all updates regardless of type (default).
+    /// If not specified, the previous setting will be used.Please note that this
+    /// parameter doesn't affect updates created before the call to the getUpdates,
+    /// so unwanted updates may be received for a short period of time.
+    pub allowed_updates: Option<Vec<String>>,
+}
+
+/// Use this method to specify a url and receive incoming updates via an outgoing
+/// webhook. Whenever there is an update for the bot, we will send an HTTPS POST
+/// request to the specified url, containing a JSON-serialized Update. In case of an
+/// unsuccessful request, we will give up after a reasonable amount of attempts.
+/// Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SetWebhook {
+    /// HTTPS url to send updates to. Use an empty string to remove webhook
+    /// integration
+    pub url: String,
+    /// Upload your public key certificate so that the root certificate in use can
+    /// be checked. See our self-signed guide for details.
+    pub certificate: Option<String>,
+    /// Maximum allowed number of simultaneous HTTPS connections to the webhook for
+    /// update delivery, 1-100. Defaults to 40. Use lower values to limit the load
+    /// on your bot‘s server, and higher values to increase your bot’s throughput.
+    pub max_connections: Option<i64>,
+    /// List the types of updates you want your bot to receive. For example, specify
+    /// [“message”, “edited_channel_post”, “callback_query”] to only receive updates
+    /// of these types. See Update for a complete list of available update types.
+    /// Specify an empty list to receive all updates regardless of type (default).
+    /// If not specified, the previous setting will be used.Please note that this
+    /// parameter doesn't affect updates created before the call to the setWebhook,
+    /// so unwanted updates may be received for a short period of time.
+    pub allowed_updates: Option<Vec<String>>,
+}
+
+/// Use this method to remove webhook integration if you decide to switch back to
+/// getUpdates. Returns True on success. Requires no parameters.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct DeleteWebhook {
+}
+
+/// Use this method to get current webhook status. Requires no parameters. On
+/// success, returns a WebhookInfo object. If the bot is using getUpdates, will
+/// return an object with the url field empty.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetWebhookInfo {
+}
+
+/// A simple method for testing your bot's auth token. Requires no parameters.
+/// Returns basic information about the bot in form of a User object.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetMe {
+}
+
+/// Use this method to send text messages. On success, the sent Message is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendMessage {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Text of the message to be sent
+    pub text: String,
+    /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
+    /// fixed-width text or inline URLs in your bot's message.
+    pub parse_mode: Option<String>,
+    /// Disables link previews for links in this message
+    pub disable_web_page_preview: Option<bool>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to forward messages of any kind. On success, the sent Message is
+/// returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct ForwardMessage {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Unique identifier for the chat where the original message was sent (or
+    /// channel username in the format @channelusername)
+    pub from_chat_id: PolymorphFromChatId,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// Message identifier in the chat specified in from_chat_id
+    pub message_id: i64,
+}
+
+/// Use this method to send photos. On success, the sent Message is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendPhoto {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Photo to send. Pass a file_id as String to send a photo that exists on the
+    /// Telegram servers (recommended), pass an HTTP URL as a String for Telegram to
+    /// get a photo from the Internet, or upload a new photo using multipart/form-
+    /// data. More info on Sending Files »
+    pub photo: String,
+    /// Photo caption (may also be used when resending photos by file_id), 0-200
+    /// characters
+    pub caption: Option<String>,
+    /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
+    /// fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to send audio files, if you want Telegram clients to display
+/// them in the music player. Your audio must be in the .mp3 format. On success, the
+/// sent Message is returned. Bots can currently send audio files of up to 50 MB in
+/// size, this limit may be changed in the future.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendAudio {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Audio file to send. Pass a file_id as String to send an audio file that
+    /// exists on the Telegram servers (recommended), pass an HTTP URL as a String
+    /// for Telegram to get an audio file from the Internet, or upload a new one
+    /// using multipart/form-data. More info on Sending Files »
+    pub audio: String,
+    /// Audio caption, 0-200 characters
+    pub caption: Option<String>,
+    /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
+    /// fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
+    /// Duration of the audio in seconds
+    pub duration: Option<i64>,
+    /// Performer
+    pub performer: Option<String>,
+    /// Track name
+    pub title: Option<String>,
+    /// Thumbnail of the file sent. The thumbnail should be in JPEG format and less
+    /// than 200 kB in size. A thumbnail‘s width and height should not exceed 90.
+    /// Ignored if the file is not uploaded using multipart/form-data. Thumbnails
+    /// can’t be reused and can be only uploaded as a new file, so you can pass
+    /// “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    pub thumb: Option<String>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to send general files. On success, the sent Message is returned.
+/// Bots can currently send files of any type of up to 50 MB in size, this limit may
+/// be changed in the future.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendDocument {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// File to send. Pass a file_id as String to send a file that exists on the
+    /// Telegram servers (recommended), pass an HTTP URL as a String for Telegram to
+    /// get a file from the Internet, or upload a new one using multipart/form-data.
+    /// More info on Sending Files »
+    pub document: String,
+    /// Thumbnail of the file sent. The thumbnail should be in JPEG format and less
+    /// than 200 kB in size. A thumbnail‘s width and height should not exceed 90.
+    /// Ignored if the file is not uploaded using multipart/form-data. Thumbnails
+    /// can’t be reused and can be only uploaded as a new file, so you can pass
+    /// “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    pub thumb: Option<String>,
+    /// Document caption (may also be used when resending documents by file_id),
+    /// 0-200 characters
+    pub caption: Option<String>,
+    /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
+    /// fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to send video files, Telegram clients support mp4 videos (other
+/// formats may be sent as Document). On success, the sent Message is returned. Bots
+/// can currently send video files of up to 50 MB in size, this limit may be changed
+/// in the future.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendVideo {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Video to send. Pass a file_id as String to send a video that exists on the
+    /// Telegram servers (recommended), pass an HTTP URL as a String for Telegram to
+    /// get a video from the Internet, or upload a new video using multipart/form-
+    /// data. More info on Sending Files »
+    pub video: String,
+    /// Duration of sent video in seconds
+    pub duration: Option<i64>,
+    /// Video width
+    pub width: Option<i64>,
+    /// Video height
+    pub height: Option<i64>,
+    /// Thumbnail of the file sent. The thumbnail should be in JPEG format and less
+    /// than 200 kB in size. A thumbnail‘s width and height should not exceed 90.
+    /// Ignored if the file is not uploaded using multipart/form-data. Thumbnails
+    /// can’t be reused and can be only uploaded as a new file, so you can pass
+    /// “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    pub thumb: Option<String>,
+    /// Video caption (may also be used when resending videos by file_id), 0-200
+    /// characters
+    pub caption: Option<String>,
+    /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
+    /// fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
+    /// Pass True, if the uploaded video is suitable for streaming
+    pub supports_streaming: Option<bool>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to send animation files (GIF or H.264/MPEG-4 AVC video without
+/// sound). On success, the sent Message is returned. Bots can currently send
+/// animation files of up to 50 MB in size, this limit may be changed in the future.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendAnimation {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Animation to send. Pass a file_id as String to send an animation that exists
+    /// on the Telegram servers (recommended), pass an HTTP URL as a String for
+    /// Telegram to get an animation from the Internet, or upload a new animation
+    /// using multipart/form-data. More info on Sending Files »
+    pub animation: String,
+    /// Duration of sent animation in seconds
+    pub duration: Option<i64>,
+    /// Animation width
+    pub width: Option<i64>,
+    /// Animation height
+    pub height: Option<i64>,
+    /// Thumbnail of the file sent. The thumbnail should be in JPEG format and less
+    /// than 200 kB in size. A thumbnail‘s width and height should not exceed 90.
+    /// Ignored if the file is not uploaded using multipart/form-data. Thumbnails
+    /// can’t be reused and can be only uploaded as a new file, so you can pass
+    /// “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    pub thumb: Option<String>,
+    /// Animation caption (may also be used when resending animation by file_id),
+    /// 0-200 characters
+    pub caption: Option<String>,
+    /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
+    /// fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to send audio files, if you want Telegram clients to display the
+/// file as a playable voice message. For this to work, your audio must be in an
+/// .ogg file encoded with OPUS (other formats may be sent as Audio or Document). On
+/// success, the sent Message is returned. Bots can currently send voice messages of
+/// up to 50 MB in size, this limit may be changed in the future.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendVoice {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Audio file to send. Pass a file_id as String to send a file that exists on
+    /// the Telegram servers (recommended), pass an HTTP URL as a String for
+    /// Telegram to get a file from the Internet, or upload a new one using
+    /// multipart/form-data. More info on Sending Files »
+    pub voice: String,
+    /// Voice message caption, 0-200 characters
+    pub caption: Option<String>,
+    /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
+    /// fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
+    /// Duration of the voice message in seconds
+    pub duration: Option<i64>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// As of v.4.0, Telegram clients support rounded square mp4 videos of up to 1
+/// minute long. Use this method to send video messages. On success, the sent
+/// Message is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendVideoNote {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Video note to send. Pass a file_id as String to send a video note that
+    /// exists on the Telegram servers (recommended) or upload a new video using
+    /// multipart/form-data. More info on Sending Files ». Sending video notes by a
+    /// URL is currently unsupported
+    pub video_note: String,
+    /// Duration of sent video in seconds
+    pub duration: Option<i64>,
+    /// Video width and height
+    pub length: Option<i64>,
+    /// Thumbnail of the file sent. The thumbnail should be in JPEG format and less
+    /// than 200 kB in size. A thumbnail‘s width and height should not exceed 90.
+    /// Ignored if the file is not uploaded using multipart/form-data. Thumbnails
+    /// can’t be reused and can be only uploaded as a new file, so you can pass
+    /// “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    pub thumb: Option<String>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to send a group of photos or videos as an album. On success, an
+/// array of the sent Messages is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendMediaGroup {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// A JSON-serialized array describing photos and videos to be sent, must
+    /// include 2–10 items
+    pub media: Vec<InputMedia>,
+    /// Sends the messages silently. Users will receive a notification with no
+    /// sound.
+    pub disable_notification: Option<bool>,
+    /// If the messages are a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+}
+
+/// Use this method to send point on the map. On success, the sent Message is
+/// returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendLocation {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Latitude of the location
+    pub latitude: f64,
+    /// Longitude of the location
+    pub longitude: f64,
+    /// Period in seconds for which the location will be updated (see Live
+    /// Locations, should be between 60 and 86400.
+    pub live_period: Option<i64>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to edit live location messages sent by the bot or via the bot
+/// (for inline bots). A location can be edited until its live_period expires or
+/// editing is explicitly disabled by a call to stopMessageLiveLocation. On success,
+/// if the edited message was sent by the bot, the edited Message is returned,
+/// otherwise True is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct EditMessageLiveLocation {
+    /// Required if inline_message_id is not specified. Unique identifier for the
+    /// target chat or username of the target channel (in the format
+    /// @channelusername)
+    pub chat_id: Option<PolymorphChatId>,
+    /// Required if inline_message_id is not specified. Identifier of the sent
+    /// message
+    pub message_id: Option<i64>,
+    /// Required if chat_id and message_id are not specified. Identifier of the
+    /// inline message
+    pub inline_message_id: Option<String>,
+    /// Latitude of new location
+    pub latitude: f64,
+    /// Longitude of new location
+    pub longitude: f64,
+    /// A JSON-serialized object for a new inline keyboard.
+    pub reply_markup: Option<InlineKeyboardMarkup>,
+}
+
+/// Use this method to stop updating a live location message sent by the bot or via
+/// the bot (for inline bots) before live_period expires. On success, if the message
+/// was sent by the bot, the sent Message is returned, otherwise True is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct StopMessageLiveLocation {
+    /// Required if inline_message_id is not specified. Unique identifier for the
+    /// target chat or username of the target channel (in the format
+    /// @channelusername)
+    pub chat_id: Option<PolymorphChatId>,
+    /// Required if inline_message_id is not specified. Identifier of the sent
+    /// message
+    pub message_id: Option<i64>,
+    /// Required if chat_id and message_id are not specified. Identifier of the
+    /// inline message
+    pub inline_message_id: Option<String>,
+    /// A JSON-serialized object for a new inline keyboard.
+    pub reply_markup: Option<InlineKeyboardMarkup>,
+}
+
+/// Use this method to send information about a venue. On success, the sent Message
+/// is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendVenue {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Latitude of the venue
+    pub latitude: f64,
+    /// Longitude of the venue
+    pub longitude: f64,
+    /// Name of the venue
+    pub title: String,
+    /// Address of the venue
+    pub address: String,
+    /// Foursquare identifier of the venue
+    pub foursquare_id: Option<String>,
+    /// Foursquare type of the venue, if known. (For example,
+    /// “arts_entertainment/default”, “arts_entertainment/aquarium” or
+    /// “food/icecream”.)
+    pub foursquare_type: Option<String>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to send phone contacts. On success, the sent Message is
+/// returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendContact {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Contact's phone number
+    pub phone_number: String,
+    /// Contact's first name
+    pub first_name: String,
+    /// Contact's last name
+    pub last_name: Option<String>,
+    /// Additional data about the contact in the form of a vCard, 0-2048 bytes
+    pub vcard: Option<String>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove keyboard or to force
+    /// a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method when you need to tell the user that something is happening on
+/// the bot's side. The status is set for 5 seconds or less (when a message arrives
+/// from your bot, Telegram clients clear its typing status). Returns True on
+/// success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendChatAction {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Type of action to broadcast. Choose one, depending on what the user is about
+    /// to receive: typing for text messages, upload_photo for photos, record_video
+    /// or upload_video for videos, record_audio or upload_audio for audio files,
+    /// upload_document for general files, find_location for location data,
+    /// record_video_note or upload_video_note for video notes.
+    pub action: String,
+}
+
+/// Use this method to get a list of profile pictures for a user. Returns a
+/// UserProfilePhotos object.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetUserProfilePhotos {
+    /// Unique identifier of the target user
+    pub user_id: i64,
+    /// Sequential number of the first photo to be returned. By default, all photos
+    /// are returned.
+    pub offset: Option<i64>,
+    /// Limits the number of photos to be retrieved. Values between 1—100 are
+    /// accepted. Defaults to 100.
+    pub limit: Option<i64>,
+}
+
+/// Use this method to get basic info about a file and prepare it for downloading.
+/// For the moment, bots can download files of up to 20MB in size. On success, a
+/// File object is returned. The file can then be downloaded via the link
+/// https://api.telegram.org/file/bot<token>/<file_path>, where <file_path> is taken
+/// from the response. It is guaranteed that the link will be valid for at least 1
+/// hour. When the link expires, a new one can be requested by calling getFile
+/// again.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetFile {
+    /// File identifier to get info about
+    pub file_id: String,
+}
+
+/// Use this method to kick a user from a group, a supergroup or a channel. In the
+/// case of supergroups and channels, the user will not be able to return to the
+/// group on their own using invite links, etc., unless unbanned first. The bot must
+/// be an administrator in the chat for this to work and must have the appropriate
+/// admin rights. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct KickChatMember {
+    /// Unique identifier for the target group or username of the target supergroup
+    /// or channel (in the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Unique identifier of the target user
+    pub user_id: i64,
+    /// Date when the user will be unbanned, unix time. If user is banned for more
+    /// than 366 days or less than 30 seconds from the current time they are
+    /// considered to be banned forever
+    pub until_date: Option<i64>,
+}
+
+/// Use this method to unban a previously kicked user in a supergroup or channel.
+/// The user will not return to the group or channel automatically, but will be able
+/// to join via link, etc. The bot must be an administrator for this to work.
+/// Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct UnbanChatMember {
+    /// Unique identifier for the target group or username of the target supergroup
+    /// or channel (in the format @username)
+    pub chat_id: PolymorphChatId,
+    /// Unique identifier of the target user
+    pub user_id: i64,
+}
+
+/// Use this method to restrict a user in a supergroup. The bot must be an
+/// administrator in the supergroup for this to work and must have the appropriate
+/// admin rights. Pass True for all boolean parameters to lift restrictions from a
+/// user. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct RestrictChatMember {
+    /// Unique identifier for the target chat or username of the target supergroup
+    /// (in the format @supergroupusername)
+    pub chat_id: PolymorphChatId,
+    /// Unique identifier of the target user
+    pub user_id: i64,
+    /// Date when restrictions will be lifted for the user, unix time. If user is
+    /// restricted for more than 366 days or less than 30 seconds from the current
+    /// time, they are considered to be restricted forever
+    pub until_date: Option<i64>,
+    /// Pass True, if the user can send text messages, contacts, locations and
+    /// venues
+    pub can_send_messages: Option<bool>,
+    /// Pass True, if the user can send audios, documents, photos, videos, video
+    /// notes and voice notes, implies can_send_messages
+    pub can_send_media_messages: Option<bool>,
+    /// Pass True, if the user can send animations, games, stickers and use inline
+    /// bots, implies can_send_media_messages
+    pub can_send_other_messages: Option<bool>,
+    /// Pass True, if the user may add web page previews to their messages, implies
+    /// can_send_media_messages
+    pub can_add_web_page_previews: Option<bool>,
+}
+
+/// Use this method to promote or demote a user in a supergroup or a channel. The
+/// bot must be an administrator in the chat for this to work and must have the
+/// appropriate admin rights. Pass False for all boolean parameters to demote a
+/// user. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PromoteChatMember {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Unique identifier of the target user
+    pub user_id: i64,
+    /// Pass True, if the administrator can change chat title, photo and other
+    /// settings
+    pub can_change_info: Option<bool>,
+    /// Pass True, if the administrator can create channel posts, channels only
+    pub can_post_messages: Option<bool>,
+    /// Pass True, if the administrator can edit messages of other users and can pin
+    /// messages, channels only
+    pub can_edit_messages: Option<bool>,
+    /// Pass True, if the administrator can delete messages of other users
+    pub can_delete_messages: Option<bool>,
+    /// Pass True, if the administrator can invite new users to the chat
+    pub can_invite_users: Option<bool>,
+    /// Pass True, if the administrator can restrict, ban or unban chat members
+    pub can_restrict_members: Option<bool>,
+    /// Pass True, if the administrator can pin messages, supergroups only
+    pub can_pin_messages: Option<bool>,
+    /// Pass True, if the administrator can add new administrators with a subset of
+    /// his own privileges or demote administrators that he has promoted, directly
+    /// or indirectly (promoted by administrators that were appointed by him)
+    pub can_promote_members: Option<bool>,
+}
+
+/// Use this method to generate a new invite link for a chat; any previously
+/// generated link is revoked. The bot must be an administrator in the chat for this
+/// to work and must have the appropriate admin rights. Returns the new invite link
+/// as String on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct ExportChatInviteLink {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+}
+
+/// Use this method to set a new profile photo for the chat. Photos can't be changed
+/// for private chats. The bot must be an administrator in the chat for this to work
+/// and must have the appropriate admin rights. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SetChatPhoto {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// New chat photo, uploaded using multipart/form-data
+    pub photo: String,
+}
+
+/// Use this method to delete a chat photo. Photos can't be changed for private
+/// chats. The bot must be an administrator in the chat for this to work and must
+/// have the appropriate admin rights. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct DeleteChatPhoto {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+}
+
+/// Use this method to change the title of a chat. Titles can't be changed for
+/// private chats. The bot must be an administrator in the chat for this to work and
+/// must have the appropriate admin rights. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SetChatTitle {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// New chat title, 1-255 characters
+    pub title: String,
+}
+
+/// Use this method to change the description of a supergroup or a channel. The bot
+/// must be an administrator in the chat for this to work and must have the
+/// appropriate admin rights. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SetChatDescription {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// New chat description, 0-255 characters
+    pub description: Option<String>,
+}
+
+/// Use this method to pin a message in a supergroup or a channel. The bot must be
+/// an administrator in the chat for this to work and must have the
+/// ‘can_pin_messages’ admin right in the supergroup or ‘can_edit_messages’ admin
+/// right in the channel. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PinChatMessage {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Identifier of a message to pin
+    pub message_id: i64,
+    /// Pass True, if it is not necessary to send a notification to all chat members
+    /// about the new pinned message. Notifications are always disabled in channels.
+    pub disable_notification: Option<bool>,
+}
+
+/// Use this method to unpin a message in a supergroup or a channel. The bot must be
+/// an administrator in the chat for this to work and must have the
+/// ‘can_pin_messages’ admin right in the supergroup or ‘can_edit_messages’ admin
+/// right in the channel. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct UnpinChatMessage {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+}
+
+/// Use this method for your bot to leave a group, supergroup or channel. Returns
+/// True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct LeaveChat {
+    /// Unique identifier for the target chat or username of the target supergroup
+    /// or channel (in the format @channelusername)
+    pub chat_id: PolymorphChatId,
+}
+
+/// Use this method to get up to date information about the chat (current name of
+/// the user for one-on-one conversations, current username of a user, group or
+/// channel, etc.). Returns a Chat object on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetChat {
+    /// Unique identifier for the target chat or username of the target supergroup
+    /// or channel (in the format @channelusername)
+    pub chat_id: PolymorphChatId,
+}
+
+/// Use this method to get a list of administrators in a chat. On success, returns
+/// an Array of ChatMember objects that contains information about all chat
+/// administrators except other bots. If the chat is a group or a supergroup and no
+/// administrators were appointed, only the creator will be returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetChatAdministrators {
+    /// Unique identifier for the target chat or username of the target supergroup
+    /// or channel (in the format @channelusername)
+    pub chat_id: PolymorphChatId,
+}
+
+/// Use this method to get the number of members in a chat. Returns Int on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetChatMembersCount {
+    /// Unique identifier for the target chat or username of the target supergroup
+    /// or channel (in the format @channelusername)
+    pub chat_id: PolymorphChatId,
+}
+
+/// Use this method to get information about a member of a chat. Returns a
+/// ChatMember object on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetChatMember {
+    /// Unique identifier for the target chat or username of the target supergroup
+    /// or channel (in the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Unique identifier of the target user
+    pub user_id: i64,
+}
+
+/// Use this method to set a new group sticker set for a supergroup. The bot must be
+/// an administrator in the chat for this to work and must have the appropriate
+/// admin rights. Use the field can_set_sticker_set optionally returned in getChat
+/// requests to check if the bot can use this method. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SetChatStickerSet {
+    /// Unique identifier for the target chat or username of the target supergroup
+    /// (in the format @supergroupusername)
+    pub chat_id: PolymorphChatId,
+    /// Name of the sticker set to be set as the group sticker set
+    pub sticker_set_name: String,
+}
+
+/// Use this method to delete a group sticker set from a supergroup. The bot must be
+/// an administrator in the chat for this to work and must have the appropriate
+/// admin rights. Use the field can_set_sticker_set optionally returned in getChat
+/// requests to check if the bot can use this method. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct DeleteChatStickerSet {
+    /// Unique identifier for the target chat or username of the target supergroup
+    /// (in the format @supergroupusername)
+    pub chat_id: PolymorphChatId,
+}
+
+/// Use this method to send answers to callback queries sent from inline keyboards.
+/// The answer will be displayed to the user as a notification at the top of the
+/// chat screen or as an alert. On success, True is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct AnswerCallbackQuery {
+    /// Unique identifier for the query to be answered
+    pub callback_query_id: String,
+    /// Text of the notification. If not specified, nothing will be shown to the
+    /// user, 0-200 characters
+    pub text: Option<String>,
+    /// If true, an alert will be shown by the client instead of a notification at
+    /// the top of the chat screen. Defaults to false.
+    pub show_alert: Option<bool>,
+    /// URL that will be opened by the user's client. If you have created a Game and
+    /// accepted the conditions via @Botfather, specify the URL that opens your game
+    /// – note that this will only work if the query comes from a callback_game
+    /// button.Otherwise, you may use links like t.me/your_bot?start=XXXX that open
+    /// your bot with a parameter.
+    pub url: Option<String>,
+    /// The maximum amount of time in seconds that the result of the callback query
+    /// may be cached client-side. Telegram apps will support caching starting in
+    /// version 3.14. Defaults to 0.
+    pub cache_time: Option<i64>,
+}
+
+/// Use this method to edit text and game messages sent by the bot or via the bot
+/// (for inline bots). On success, if edited message is sent by the bot, the edited
+/// Message is returned, otherwise True is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct EditMessageText {
+    /// Required if inline_message_id is not specified. Unique identifier for the
+    /// target chat or username of the target channel (in the format
+    /// @channelusername)
+    pub chat_id: Option<PolymorphChatId>,
+    /// Required if inline_message_id is not specified. Identifier of the sent
+    /// message
+    pub message_id: Option<i64>,
+    /// Required if chat_id and message_id are not specified. Identifier of the
+    /// inline message
+    pub inline_message_id: Option<String>,
+    /// New text of the message
+    pub text: String,
+    /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
+    /// fixed-width text or inline URLs in your bot's message.
+    pub parse_mode: Option<String>,
+    /// Disables link previews for links in this message
+    pub disable_web_page_preview: Option<bool>,
+    /// A JSON-serialized object for an inline keyboard.
+    pub reply_markup: Option<InlineKeyboardMarkup>,
+}
+
+/// Use this method to edit captions of messages sent by the bot or via the bot (for
+/// inline bots). On success, if edited message is sent by the bot, the edited
+/// Message is returned, otherwise True is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct EditMessageCaption {
+    /// Required if inline_message_id is not specified. Unique identifier for the
+    /// target chat or username of the target channel (in the format
+    /// @channelusername)
+    pub chat_id: Option<PolymorphChatId>,
+    /// Required if inline_message_id is not specified. Identifier of the sent
+    /// message
+    pub message_id: Option<i64>,
+    /// Required if chat_id and message_id are not specified. Identifier of the
+    /// inline message
+    pub inline_message_id: Option<String>,
+    /// New caption of the message
+    pub caption: Option<String>,
+    /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
+    /// fixed-width text or inline URLs in the media caption.
+    pub parse_mode: Option<String>,
+    /// A JSON-serialized object for an inline keyboard.
+    pub reply_markup: Option<InlineKeyboardMarkup>,
+}
+
+/// Use this method to edit audio, document, photo, or video messages. If a message
+/// is a part of a message album, then it can be edited only to a photo or a video.
+/// Otherwise, message type can be changed arbitrarily. When inline message is
+/// edited, new file can't be uploaded. Use previously uploaded file via its file_id
+/// or specify a URL. On success, if the edited message was sent by the bot, the
+/// edited Message is returned, otherwise True is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct EditMessageMedia {
+    /// Required if inline_message_id is not specified. Unique identifier for the
+    /// target chat or username of the target channel (in the format
+    /// @channelusername)
+    pub chat_id: Option<PolymorphChatId>,
+    /// Required if inline_message_id is not specified. Identifier of the sent
+    /// message
+    pub message_id: Option<i64>,
+    /// Required if chat_id and message_id are not specified. Identifier of the
+    /// inline message
+    pub inline_message_id: Option<String>,
+    /// A JSON-serialized object for a new media content of the message
+    pub media: InputMedia,
+    /// A JSON-serialized object for a new inline keyboard.
+    pub reply_markup: Option<InlineKeyboardMarkup>,
+}
+
+/// Use this method to edit only the reply markup of messages sent by the bot or via
+/// the bot (for inline bots).  On success, if edited message is sent by the bot,
+/// the edited Message is returned, otherwise True is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct EditMessageReplyMarkup {
+    /// Required if inline_message_id is not specified. Unique identifier for the
+    /// target chat or username of the target channel (in the format
+    /// @channelusername)
+    pub chat_id: Option<PolymorphChatId>,
+    /// Required if inline_message_id is not specified. Identifier of the sent
+    /// message
+    pub message_id: Option<i64>,
+    /// Required if chat_id and message_id are not specified. Identifier of the
+    /// inline message
+    pub inline_message_id: Option<String>,
+    /// A JSON-serialized object for an inline keyboard.
+    pub reply_markup: Option<InlineKeyboardMarkup>,
+}
+
+/// Use this method to delete a message, including service messages, with the
+/// following limitations:- A message can only be deleted if it was sent less than
+/// 48 hours ago.- Bots can delete outgoing messages in groups and supergroups.-
+/// Bots granted can_post_messages permissions can delete outgoing messages in
+/// channels.- If the bot is an administrator of a group, it can delete any message
+/// there.- If the bot has can_delete_messages permission in a supergroup or a
+/// channel, it can delete any message there.Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct DeleteMessage {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Identifier of the message to delete
+    pub message_id: i64,
+}
+
+/// Use this method to send .webp stickers. On success, the sent Message is
+/// returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendSticker {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Sticker to send. Pass a file_id as String to send a file that exists on the
+    /// Telegram servers (recommended), pass an HTTP URL as a String for Telegram to
+    /// get a .webp file from the Internet, or upload a new one using
+    /// multipart/form-data. More info on Sending Files »
+    pub sticker: String,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to get a sticker set. On success, a StickerSet object is
+/// returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetStickerSet {
+    /// Name of the sticker set
+    pub name: String,
+}
+
+/// Use this method to upload a .png file with a sticker for later use in
+/// createNewStickerSet and addStickerToSet methods (can be used multiple times).
+/// Returns the uploaded File on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct UploadStickerFile {
+    /// User identifier of sticker file owner
+    pub user_id: i64,
+    /// Png image with the sticker, must be up to 512 kilobytes in size, dimensions
+    /// must not exceed 512px, and either width or height must be exactly 512px.
+    /// More info on Sending Files »
+    pub png_sticker: String,
+}
+
+/// Use this method to create new sticker set owned by a user. The bot will be able
+/// to edit the created sticker set. Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct CreateNewStickerSet {
+    /// User identifier of created sticker set owner
+    pub user_id: i64,
+    /// Short name of sticker set, to be used in t.me/addstickers/ URLs (e.g.,
+    /// animals). Can contain only english letters, digits and underscores. Must
+    /// begin with a letter, can't contain consecutive underscores and must end in
+    /// “_by_<bot username>”. <bot_username> is case insensitive. 1-64 characters.
+    pub name: String,
+    /// Sticker set title, 1-64 characters
+    pub title: String,
+    /// Png image with the sticker, must be up to 512 kilobytes in size, dimensions
+    /// must not exceed 512px, and either width or height must be exactly 512px.
+    /// Pass a file_id as a String to send a file that already exists on the
+    /// Telegram servers, pass an HTTP URL as a String for Telegram to get a file
+    /// from the Internet, or upload a new one using multipart/form-data. More info
+    /// on Sending Files »
+    pub png_sticker: String,
+    /// One or more emoji corresponding to the sticker
+    pub emojis: String,
+    /// Pass True, if a set of mask stickers should be created
+    pub contains_masks: Option<bool>,
+    /// A JSON-serialized object for position where the mask should be placed on
+    /// faces
+    pub mask_position: Option<MaskPosition>,
+}
+
+/// Use this method to add a new sticker to a set created by the bot. Returns True
+/// on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct AddStickerToSet {
+    /// User identifier of sticker set owner
+    pub user_id: i64,
+    /// Sticker set name
+    pub name: String,
+    /// Png image with the sticker, must be up to 512 kilobytes in size, dimensions
+    /// must not exceed 512px, and either width or height must be exactly 512px.
+    /// Pass a file_id as a String to send a file that already exists on the
+    /// Telegram servers, pass an HTTP URL as a String for Telegram to get a file
+    /// from the Internet, or upload a new one using multipart/form-data. More info
+    /// on Sending Files »
+    pub png_sticker: String,
+    /// One or more emoji corresponding to the sticker
+    pub emojis: String,
+    /// A JSON-serialized object for position where the mask should be placed on
+    /// faces
+    pub mask_position: Option<MaskPosition>,
+}
+
+/// Use this method to move a sticker in a set created by the bot to a specific
+/// position . Returns True on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SetStickerPositionInSet {
+    /// File identifier of the sticker
+    pub sticker: String,
+    /// New sticker position in the set, zero-based
+    pub position: i64,
+}
+
+/// Use this method to delete a sticker from a set created by the bot. Returns True
+/// on success.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct DeleteStickerFromSet {
+    /// File identifier of the sticker
+    pub sticker: String,
+}
+
+/// Use this method to send answers to an inline query. On success, True is
+/// returned.No more than 50 results per query are allowed.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct AnswerInlineQuery {
+    /// Unique identifier for the answered query
+    pub inline_query_id: String,
+    /// A JSON-serialized array of results for the inline query
+    pub results: Vec<InlineQueryResult>,
+    /// The maximum amount of time in seconds that the result of the inline query
+    /// may be cached on the server. Defaults to 300.
+    pub cache_time: Option<i64>,
+    /// Pass True, if results may be cached on the server side only for the user
+    /// that sent the query. By default, results may be returned to any user who
+    /// sends the same query
+    pub is_personal: Option<bool>,
+    /// Pass the offset that a client should send in the next query with the same
+    /// text to receive more results. Pass an empty string if there are no more
+    /// results or if you don‘t support pagination. Offset length can’t exceed 64
+    /// bytes.
+    pub next_offset: Option<String>,
+    /// If passed, clients will display a button with specified text that switches
+    /// the user to a private chat with the bot and sends the bot a start message
+    /// with the parameter switch_pm_parameter
+    pub switch_pm_text: Option<String>,
+    /// Deep-linking parameter for the /start message sent to the bot when user
+    /// presses the switch button. 1-64 characters, only A-Z, a-z, 0-9, _ and - are
+    /// allowed.Example: An inline bot that sends YouTube videos can ask the user to
+    /// connect the bot to their YouTube account to adapt search results
+    /// accordingly. To do this, it displays a ‘Connect your YouTube account’ button
+    /// above the results, or even before showing any. The user presses the button,
+    /// switches to a private chat with the bot and, in doing so, passes a start
+    /// parameter that instructs the bot to return an oauth link. Once done, the bot
+    /// can offer a switch_inline button so that the user can easily return to the
+    /// chat where they wanted to use the bot's inline capabilities.
+    pub switch_pm_parameter: Option<String>,
+}
+
+/// Use this method to send invoices. On success, the sent Message is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendInvoice {
+    /// Unique identifier for the target private chat
+    pub chat_id: i64,
+    /// Product name, 1-32 characters
+    pub title: String,
+    /// Product description, 1-255 characters
+    pub description: String,
+    /// Bot-defined invoice payload, 1-128 bytes. This will not be displayed to the
+    /// user, use for your internal processes.
+    pub payload: String,
+    /// Payments provider token, obtained via Botfather
+    pub provider_token: String,
+    /// Unique deep-linking parameter that can be used to generate this invoice when
+    /// used as a start parameter
+    pub start_parameter: String,
+    /// Three-letter ISO 4217 currency code, see more on currencies
+    pub currency: String,
+    /// Price breakdown, a list of components (e.g. product price, tax, discount,
+    /// delivery cost, delivery tax, bonus, etc.)
+    pub prices: Vec<LabeledPrice>,
+    /// JSON-encoded data about the invoice, which will be shared with the payment
+    /// provider. A detailed description of required fields should be provided by
+    /// the payment provider.
+    pub provider_data: Option<String>,
+    /// URL of the product photo for the invoice. Can be a photo of the goods or a
+    /// marketing image for a service. People like it better when they see what they
+    /// are paying for.
+    pub photo_url: Option<String>,
+    /// Photo size
+    pub photo_size: Option<i64>,
+    /// Photo width
+    pub photo_width: Option<i64>,
+    /// Photo height
+    pub photo_height: Option<i64>,
+    /// Pass True, if you require the user's full name to complete the order
+    pub need_name: Option<bool>,
+    /// Pass True, if you require the user's phone number to complete the order
+    pub need_phone_number: Option<bool>,
+    /// Pass True, if you require the user's email address to complete the order
+    pub need_email: Option<bool>,
+    /// Pass True, if you require the user's shipping address to complete the order
+    pub need_shipping_address: Option<bool>,
+    /// Pass True, if user's phone number should be sent to provider
+    pub send_phone_number_to_provider: Option<bool>,
+    /// Pass True, if user's email address should be sent to provider
+    pub send_email_to_provider: Option<bool>,
+    /// Pass True, if the final price depends on the shipping method
+    pub is_flexible: Option<bool>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// A JSON-serialized object for an inline keyboard. If empty, one 'Pay total
+    /// price' button will be shown. If not empty, the first button must be a Pay
+    /// button.
+    pub reply_markup: Option<InlineKeyboardMarkup>,
+}
+
+/// If you sent an invoice requesting a shipping address and the parameter
+/// is_flexible was specified, the Bot API will send an Update with a shipping_query
+/// field to the bot. Use this method to reply to shipping queries. On success, True
+/// is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct AnswerShippingQuery {
+    /// Unique identifier for the query to be answered
+    pub shipping_query_id: String,
+    /// Specify True if delivery to the specified address is possible and False if
+    /// there are any problems (for example, if delivery to the specified address is
+    /// not possible)
+    pub ok: bool,
+    /// Required if ok is True. A JSON-serialized array of available shipping
+    /// options.
+    pub shipping_options: Option<Vec<ShippingOption>>,
+    /// Required if ok is False. Error message in human readable form that explains
+    /// why it is impossible to complete the order (e.g. "Sorry, delivery to your
+    /// desired address is unavailable'). Telegram will display this message to the
+    /// user.
+    pub error_message: Option<String>,
+}
+
+/// Once the user has confirmed their payment and shipping details, the Bot API
+/// sends the final confirmation in the form of an Update with the field
+/// pre_checkout_query. Use this method to respond to such pre-checkout queries. On
+/// success, True is returned. Note: The Bot API must receive an answer within 10
+/// seconds after the pre-checkout query was sent.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct AnswerPreCheckoutQuery {
+    /// Unique identifier for the query to be answered
+    pub pre_checkout_query_id: String,
+    /// Specify True if everything is alright (goods are available, etc.) and the
+    /// bot is ready to proceed with the order. Use False if there are any problems.
+    pub ok: bool,
+    /// Required if ok is False. Error message in human readable form that explains
+    /// the reason for failure to proceed with the checkout (e.g. "Sorry, somebody
+    /// just bought the last of our amazing black T-shirts while you were busy
+    /// filling out your payment details. Please choose a different color or
+    /// garment!"). Telegram will display this message to the user.
+    pub error_message: Option<String>,
+}
+
+/// Use this method to send a game. On success, the sent Message is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendGame {
+    /// Unique identifier for the target chat
+    pub chat_id: i64,
+    /// Short name of the game, serves as the unique identifier for the game. Set up
+    /// your games via Botfather.
+    pub game_short_name: String,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// A JSON-serialized object for an inline keyboard. If empty, one ‘Play
+    /// game_title’ button will be shown. If not empty, the first button must launch
+    /// the game.
+    pub reply_markup: Option<InlineKeyboardMarkup>,
+}
+
+/// Use this method to set the score of the specified user in a game. On success, if
+/// the message was sent by the bot, returns the edited Message, otherwise returns
+/// True. Returns an error, if the new score is not greater than the user's current
+/// score in the chat and force is False.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SetGameScore {
+    /// User identifier
+    pub user_id: i64,
+    /// New score, must be non-negative
+    pub score: i64,
+    /// Pass True, if the high score is allowed to decrease. This can be useful when
+    /// fixing mistakes or banning cheaters
+    pub force: Option<bool>,
+    /// Pass True, if the game message should not be automatically edited to include
+    /// the current scoreboard
+    pub disable_edit_message: Option<bool>,
+    /// Required if inline_message_id is not specified. Unique identifier for the
+    /// target chat
+    pub chat_id: Option<i64>,
+    /// Required if inline_message_id is not specified. Identifier of the sent
+    /// message
+    pub message_id: Option<i64>,
+    /// Required if chat_id and message_id are not specified. Identifier of the
+    /// inline message
+    pub inline_message_id: Option<String>,
+}
+
+/// Use this method to get data for high score tables. Will return the score of the
+/// specified user and several of his neighbors in a game. On success, returns an
+/// Array of GameHighScore objects.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct GetGameHighScores {
+    /// Target user id
+    pub user_id: i64,
+    /// Required if inline_message_id is not specified. Unique identifier for the
+    /// target chat
+    pub chat_id: Option<i64>,
+    /// Required if inline_message_id is not specified. Identifier of the sent
+    /// message
+    pub message_id: Option<i64>,
+    /// Required if chat_id and message_id are not specified. Identifier of the
+    /// inline message
+    pub inline_message_id: Option<String>,
+}
+
