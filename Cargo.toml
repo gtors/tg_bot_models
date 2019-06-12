@@ -1,14 +1,15 @@
 [package]
 name = "tg_bot_models"
-description = "Telegram Bot API types"
-version = "0.4.0"
+description = "Telegram Bot API types (for API 4.3)"
+version = "0.5.0"
 authors = ["gtors <andrey.torsunov@gmail.com>"]
 homepage = "https://github.com/gtors/tg_bot_models"
 repository = "https://github.com/gtors/tg_bot_models"
 keywords = ["telegram", "telegram-bot", "tg"]
 license = "MIT"
+edition = "2018"
 
 [dependencies]
 serde = "1.0"
-serde_derive = "1.0"
-serde_json = "1.0"
+serde_derive = "^1.0"
+serde_json = "^1.0"

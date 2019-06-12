@@ -38,6 +38,9 @@ pub struct Update {
     /// Optional. New incoming pre-checkout query. Contains full information about
     /// checkout
     pub pre_checkout_query: Option<PreCheckoutQuery>,
+    /// Optional. New poll state. Bots receive only updates about stopped polls and
+    /// polls, which are sent by the bot
+    pub poll: Option<Poll>,
 }
 
 
@@ -109,11 +112,13 @@ pub struct Chat {
     /// Optional. Description, for supergroups and channel chats. Returned only in
     /// getChat.
     pub description: Option<String>,
-    /// Optional. Chat invite link, for supergroups and channel chats. Returned only
-    /// in getChat.
+    /// Optional. Chat invite link, for supergroups and channel chats. Each
+    /// administrator in a chat generates their own invite links, so the bot must
+    /// first generate the link using exportChatInviteLink. Returned only in
+    /// getChat.
     pub invite_link: Option<String>,
-    /// Optional. Pinned message, for supergroups and channel chats. Returned only
-    /// in getChat.
+    /// Optional. Pinned message, for groups, supergroups and channels. Returned
+    /// only in getChat.
     pub pinned_message: Option<Box<Message>>,
     /// Optional. For supergroups, name of group sticker set. Returned only in
     /// getChat.
@@ -146,6 +151,9 @@ pub struct Message {
     /// Optional. For messages forwarded from channels, signature of the post author
     /// if present
     pub forward_signature: Option<String>,
+    /// Optional. Sender's name for messages forwarded from users who disallow
+    /// adding a link to their account in forwarded messages
+    pub forward_sender_name: Option<String>,
     /// Optional. For forwarded messages, date the original message was sent in Unix
     /// time
     pub forward_date: Option<i64>,
@@ -189,8 +197,8 @@ pub struct Message {
     pub voice: Option<Voice>,
     /// Optional. Message is a video note, information about the video message
     pub video_note: Option<VideoNote>,
-    /// Optional. Caption for the audio, document, photo, video or voice, 0-200
-    /// characters
+    /// Optional. Caption for the animation, audio, document, photo, video or voice,
+    /// 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Message is a shared contact, information about the contact
     pub contact: Option<Contact>,
@@ -198,6 +206,8 @@ pub struct Message {
     pub location: Option<Location>,
     /// Optional. Message is a venue, information about the venue
     pub venue: Option<Venue>,
+    /// Optional. Message is a native poll, information about the poll
+    pub poll: Option<Poll>,
     /// Optional. New members that were added to the group or supergroup and
     /// information about them (the bot itself may be one of these members)
     pub new_chat_members: Option<Vec<User>>,
@@ -250,6 +260,9 @@ pub struct Message {
     pub connected_website: Option<String>,
     /// Optional. Telegram Passport data
     pub passport_data: Option<PassportData>,
+    /// Optional. Inline keyboard attached to the message. login_url buttons are
+    /// represented as ordinary url buttons.
+    pub reply_markup: Option<InlineKeyboardMarkup>,
 }
 
 
@@ -389,7 +402,7 @@ pub struct Voice {
 pub struct VideoNote {
     /// Unique identifier for this file
     pub file_id: String,
-    /// Video width and height as defined by sender
+    /// Video width and height (diameter of the video message) as defined by sender
     pub length: i64,
     /// Duration of the video in seconds as defined by sender
     pub duration: i64,
@@ -441,6 +454,30 @@ pub struct Venue {
     /// “arts_entertainment/default”, “arts_entertainment/aquarium” or
     /// “food/icecream”.)
     pub foursquare_type: Option<String>,
+}
+
+
+/// This object contains information about one answer option in a poll.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PollOption {
+    /// Option text, 1-100 characters
+    pub text: String,
+    /// Number of users that voted for this option
+    pub voter_count: i64,
+}
+
+
+/// This object contains information about a poll.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct Poll {
+    /// Unique poll identifier
+    pub id: String,
+    /// Poll question, 1-255 characters
+    pub question: String,
+    /// List of poll options
+    pub options: Vec<PollOption>,
+    /// True, if the poll is closed
+    pub is_closed: bool,
 }
 
 
@@ -553,6 +590,9 @@ pub struct InlineKeyboardButton {
     pub text: String,
     /// Optional. HTTP or tg:// url to be opened when button is pressed
     pub url: Option<String>,
+    /// Optional. An HTTP URL used to automatically authorize the user. Can be used
+    /// as a replacement for the Telegram Login Widget.
+    pub login_url: Option<LoginUrl>,
     /// Optional. Data to be sent in a callback query to the bot when button is
     /// pressed, 1-64 bytes
     pub callback_data: Option<String>,
@@ -578,6 +618,33 @@ pub struct InlineKeyboardButton {
     /// Optional. Specify True, to send a Pay button.NOTE: This type of button must
     /// always be the first button in the first row.
     pub pay: Option<bool>,
+}
+
+
+/// This object represents a parameter of the inline keyboard button used to
+/// automatically authorize a user. Serves as a great replacement for the Telegram
+/// Login Widget when the user is coming from Telegram. All the user needs to do is
+/// tap/click a button and confirm that they want to log in:
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct LoginUrl {
+    /// An HTTP URL to be opened with user authorization data added to the query
+    /// string when the button is pressed. If the user refuses to provide
+    /// authorization data, the original URL without information about the user will
+    /// be opened. The data added is the same as described in Receiving
+    /// authorization data.NOTE: You must always check the hash of the received data
+    /// to verify the authentication and the integrity of the data as described in
+    /// Checking authorization.
+    pub url: String,
+    /// Optional. New text of the button in forwarded messages.
+    pub forward_text: Option<String>,
+    /// Optional. Username of a bot, which will be used for user authorization. See
+    /// Setting up a bot for more details. If not specified, the current bot's
+    /// username will be assumed. The url's domain must be the same as the domain
+    /// linked with the bot. See Linking your domain to the bot for more details.
+    pub bot_username: Option<String>,
+    /// Optional. Pass True to request the permission for your bot to send messages
+    /// to the user.
+    pub request_write_access: Option<bool>,
 }
 
 
@@ -674,13 +741,16 @@ pub struct ChatMember {
     /// or unban chat members
     pub can_restrict_members: Option<bool>,
     /// Optional. Administrators only. True, if the administrator can pin messages,
-    /// supergroups only
+    /// groups and supergroups only
     pub can_pin_messages: Option<bool>,
     /// Optional. Administrators only. True, if the administrator can add new
     /// administrators with a subset of his own privileges or demote administrators
     /// that he has promoted, directly or indirectly (promoted by administrators
     /// that were appointed by the user)
     pub can_promote_members: Option<bool>,
+    /// Optional. Restricted only. True, if the user is a member of the chat at the
+    /// moment of the request
+    pub is_member: Option<bool>,
     /// Optional. Restricted only. True, if the user can send text messages,
     /// contacts, locations and venues
     pub can_send_messages: Option<bool>,
@@ -735,7 +805,7 @@ pub struct InputMediaPhoto {
     /// multipart/form-data under <file_attach_name> name. More info on Sending
     /// Files »
     pub media: String,
-    /// Optional. Caption of the photo to be sent, 0-200 characters
+    /// Optional. Caption of the photo to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -755,14 +825,16 @@ pub struct InputMediaVideo {
     /// multipart/form-data under <file_attach_name> name. More info on Sending
     /// Files »
     pub media: String,
-    /// Optional. Thumbnail of the file sent. The thumbnail should be in JPEG format
-    /// and less than 200 kB in size. A thumbnail‘s width and height should not
-    /// exceed 90. Ignored if the file is not uploaded using multipart/form-data.
-    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
-    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
-    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    /// Optional. Thumbnail of the file sent; can be ignored if thumbnail generation
+    /// for the file is supported server-side. The thumbnail should be in JPEG
+    /// format and less than 200 kB in size. A thumbnail‘s width and height should
+    /// not exceed 320. Ignored if the file is not uploaded using multipart/form-
+    /// data. Thumbnails can’t be reused and can be only uploaded as a new file, so
+    /// you can pass “attach://<file_attach_name>” if the thumbnail was uploaded
+    /// using multipart/form-data under <file_attach_name>. More info on Sending
+    /// Files »
     pub thumb: Option<String>,
-    /// Optional. Caption of the video to be sent, 0-200 characters
+    /// Optional. Caption of the video to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -791,14 +863,16 @@ pub struct InputMediaAnimation {
     /// multipart/form-data under <file_attach_name> name. More info on Sending
     /// Files »
     pub media: String,
-    /// Optional. Thumbnail of the file sent. The thumbnail should be in JPEG format
-    /// and less than 200 kB in size. A thumbnail‘s width and height should not
-    /// exceed 90. Ignored if the file is not uploaded using multipart/form-data.
-    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
-    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
-    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    /// Optional. Thumbnail of the file sent; can be ignored if thumbnail generation
+    /// for the file is supported server-side. The thumbnail should be in JPEG
+    /// format and less than 200 kB in size. A thumbnail‘s width and height should
+    /// not exceed 320. Ignored if the file is not uploaded using multipart/form-
+    /// data. Thumbnails can’t be reused and can be only uploaded as a new file, so
+    /// you can pass “attach://<file_attach_name>” if the thumbnail was uploaded
+    /// using multipart/form-data under <file_attach_name>. More info on Sending
+    /// Files »
     pub thumb: Option<String>,
-    /// Optional. Caption of the animation to be sent, 0-200 characters
+    /// Optional. Caption of the animation to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -824,14 +898,16 @@ pub struct InputMediaAudio {
     /// multipart/form-data under <file_attach_name> name. More info on Sending
     /// Files »
     pub media: String,
-    /// Optional. Thumbnail of the file sent. The thumbnail should be in JPEG format
-    /// and less than 200 kB in size. A thumbnail‘s width and height should not
-    /// exceed 90. Ignored if the file is not uploaded using multipart/form-data.
-    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
-    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
-    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    /// Optional. Thumbnail of the file sent; can be ignored if thumbnail generation
+    /// for the file is supported server-side. The thumbnail should be in JPEG
+    /// format and less than 200 kB in size. A thumbnail‘s width and height should
+    /// not exceed 320. Ignored if the file is not uploaded using multipart/form-
+    /// data. Thumbnails can’t be reused and can be only uploaded as a new file, so
+    /// you can pass “attach://<file_attach_name>” if the thumbnail was uploaded
+    /// using multipart/form-data under <file_attach_name>. More info on Sending
+    /// Files »
     pub thumb: Option<String>,
-    /// Optional. Caption of the audio to be sent, 0-200 characters
+    /// Optional. Caption of the audio to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -857,14 +933,16 @@ pub struct InputMediaDocument {
     /// multipart/form-data under <file_attach_name> name. More info on Sending
     /// Files »
     pub media: String,
-    /// Optional. Thumbnail of the file sent. The thumbnail should be in JPEG format
-    /// and less than 200 kB in size. A thumbnail‘s width and height should not
-    /// exceed 90. Ignored if the file is not uploaded using multipart/form-data.
-    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
-    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
-    /// multipart/form-data under <file_attach_name>. More info on Sending Files »
+    /// Optional. Thumbnail of the file sent; can be ignored if thumbnail generation
+    /// for the file is supported server-side. The thumbnail should be in JPEG
+    /// format and less than 200 kB in size. A thumbnail‘s width and height should
+    /// not exceed 320. Ignored if the file is not uploaded using multipart/form-
+    /// data. Thumbnails can’t be reused and can be only uploaded as a new file, so
+    /// you can pass “attach://<file_attach_name>” if the thumbnail was uploaded
+    /// using multipart/form-data under <file_attach_name>. More info on Sending
+    /// Files »
     pub thumb: Option<String>,
-    /// Optional. Caption of the document to be sent, 0-200 characters
+    /// Optional. Caption of the document to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1024,7 +1102,7 @@ pub struct InlineQueryResultPhoto {
     pub title: Option<String>,
     /// Optional. Short description of the result
     pub description: Option<String>,
-    /// Optional. Caption of the photo to be sent, 0-200 characters
+    /// Optional. Caption of the photo to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1059,7 +1137,7 @@ pub struct InlineQueryResultGif {
     pub thumb_url: String,
     /// Optional. Title for the result
     pub title: Option<String>,
-    /// Optional. Caption of the GIF file to be sent, 0-200 characters
+    /// Optional. Caption of the GIF file to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1094,7 +1172,7 @@ pub struct InlineQueryResultMpeg4Gif {
     pub thumb_url: String,
     /// Optional. Title for the result
     pub title: Option<String>,
-    /// Optional. Caption of the MPEG-4 file to be sent, 0-200 characters
+    /// Optional. Caption of the MPEG-4 file to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1125,7 +1203,7 @@ pub struct InlineQueryResultVideo {
     pub thumb_url: String,
     /// Title for the result
     pub title: String,
-    /// Optional. Caption of the video to be sent, 0-200 characters
+    /// Optional. Caption of the video to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1161,7 +1239,7 @@ pub struct InlineQueryResultAudio {
     pub audio_url: String,
     /// Title
     pub title: String,
-    /// Optional. Caption, 0-200 characters
+    /// Optional. Caption, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1192,7 +1270,7 @@ pub struct InlineQueryResultVoice {
     pub voice_url: String,
     /// Recording title
     pub title: String,
-    /// Optional. Caption, 0-200 characters
+    /// Optional. Caption, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1219,7 +1297,7 @@ pub struct InlineQueryResultDocument {
     pub id: String,
     /// Title for the result
     pub title: String,
-    /// Optional. Caption of the document to be sent, 0-200 characters
+    /// Optional. Caption of the document to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1377,7 +1455,7 @@ pub struct InlineQueryResultCachedPhoto {
     pub title: Option<String>,
     /// Optional. Short description of the result
     pub description: Option<String>,
-    /// Optional. Caption of the photo to be sent, 0-200 characters
+    /// Optional. Caption of the photo to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1404,7 +1482,7 @@ pub struct InlineQueryResultCachedGif {
     pub gif_file_id: String,
     /// Optional. Title for the result
     pub title: Option<String>,
-    /// Optional. Caption of the GIF file to be sent, 0-200 characters
+    /// Optional. Caption of the GIF file to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1432,7 +1510,7 @@ pub struct InlineQueryResultCachedMpeg4Gif {
     pub mpeg4_file_id: String,
     /// Optional. Title for the result
     pub title: Option<String>,
-    /// Optional. Caption of the MPEG-4 file to be sent, 0-200 characters
+    /// Optional. Caption of the MPEG-4 file to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1481,7 +1559,7 @@ pub struct InlineQueryResultCachedDocument {
     pub document_file_id: String,
     /// Optional. Short description of the result
     pub description: Option<String>,
-    /// Optional. Caption of the document to be sent, 0-200 characters
+    /// Optional. Caption of the document to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1510,7 +1588,7 @@ pub struct InlineQueryResultCachedVideo {
     pub title: String,
     /// Optional. Short description of the result
     pub description: Option<String>,
-    /// Optional. Caption of the video to be sent, 0-200 characters
+    /// Optional. Caption of the video to be sent, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1537,7 +1615,7 @@ pub struct InlineQueryResultCachedVoice {
     pub voice_file_id: String,
     /// Voice message title
     pub title: String,
-    /// Optional. Caption, 0-200 characters
+    /// Optional. Caption, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1562,7 +1640,7 @@ pub struct InlineQueryResultCachedAudio {
     pub id: String,
     /// A valid file identifier for the audio file
     pub audio_file_id: String,
-    /// Optional. Caption, 0-200 characters
+    /// Optional. Caption, 0-1024 characters
     pub caption: Option<String>,
     /// Optional. Send Markdown or HTML, if you want Telegram apps to show bold,
     /// italic, fixed-width text or inline URLs in the media caption.
@@ -1842,7 +1920,7 @@ pub struct EncryptedPassportElement {
     pub ty: String,
     /// Optional. Base64-encoded encrypted Telegram Passport element data provided
     /// by the user, available for “personal_details”, “passport”, “driver_license”,
-    /// “identity_card”, “identity_passport” and “address” types. Can be decrypted
+    /// “identity_card”, “internal_passport” and “address” types. Can be decrypted
     /// and verified using the accompanying EncryptedCredentials.
     pub data: Option<String>,
     /// Optional. User's verified phone number, available only for “phone_number”
@@ -1869,6 +1947,15 @@ pub struct EncryptedPassportElement {
     /// “identity_card” and “internal_passport”. The file can be decrypted and
     /// verified using the accompanying EncryptedCredentials.
     pub selfie: Option<PassportFile>,
+    /// Optional. Array of encrypted files with translated versions of documents
+    /// provided by the user. Available if requested for “passport”,
+    /// “driver_license”, “identity_card”, “internal_passport”, “utility_bill”,
+    /// “bank_statement”, “rental_agreement”, “passport_registration” and
+    /// “temporary_registration” types. Files can be decrypted and verified using
+    /// the accompanying EncryptedCredentials.
+    pub translation: Option<Vec<PassportFile>>,
+    /// Base64-encoded element hash for using in PassportElementErrorUnspecified
+    pub hash: String,
 }
 
 
@@ -1899,6 +1986,9 @@ pub enum PassportElementError {
     PassportElementErrorSelfie(PassportElementErrorSelfie),
     PassportElementErrorFile(PassportElementErrorFile),
     PassportElementErrorFiles(PassportElementErrorFiles),
+    PassportElementErrorTranslationFile(PassportElementErrorTranslationFile),
+    PassportElementErrorTranslationFiles(PassportElementErrorTranslationFiles),
+    PassportElementErrorUnspecified(PassportElementErrorUnspecified),
 }
 
 
@@ -2004,6 +2094,60 @@ pub struct PassportElementErrorFiles {
     pub ty: String,
     /// List of base64-encoded file hashes
     pub file_hashes: Vec<String>,
+    /// Error message
+    pub message: String,
+}
+
+
+/// Represents an issue with one of the files that constitute the translation of a
+/// document. The error is considered resolved when the file changes.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportElementErrorTranslationFile {
+    /// Error source, must be translation_file
+    pub source: String,
+    /// Type of element of the user's Telegram Passport which has the issue, one of
+    /// “passport”, “driver_license”, “identity_card”, “internal_passport”,
+    /// “utility_bill”, “bank_statement”, “rental_agreement”,
+    /// “passport_registration”, “temporary_registration”
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// Base64-encoded file hash
+    pub file_hash: String,
+    /// Error message
+    pub message: String,
+}
+
+
+/// Represents an issue with the translated version of a document. The error is
+/// considered resolved when a file with the document translation change.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportElementErrorTranslationFiles {
+    /// Error source, must be translation_files
+    pub source: String,
+    /// Type of element of the user's Telegram Passport which has the issue, one of
+    /// “passport”, “driver_license”, “identity_card”, “internal_passport”,
+    /// “utility_bill”, “bank_statement”, “rental_agreement”,
+    /// “passport_registration”, “temporary_registration”
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// List of base64-encoded file hashes
+    pub file_hashes: Vec<String>,
+    /// Error message
+    pub message: String,
+}
+
+
+/// Represents an issue in an unspecified place. The error is considered resolved
+/// when new data is added.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PassportElementErrorUnspecified {
+    /// Error source, must be unspecified
+    pub source: String,
+    /// Type of element of the user's Telegram Passport which has the issue
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// Base64-encoded element hash
+    pub element_hash: String,
     /// Error message
     pub message: String,
 }
@@ -2193,7 +2337,7 @@ pub struct SendPhoto {
     /// get a photo from the Internet, or upload a new photo using multipart/form-
     /// data. More info on Sending Files »
     pub photo: String,
-    /// Photo caption (may also be used when resending photos by file_id), 0-200
+    /// Photo caption (may also be used when resending photos by file_id), 0-1024
     /// characters
     pub caption: Option<String>,
     /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
@@ -2223,7 +2367,7 @@ pub struct SendAudio {
     /// for Telegram to get an audio file from the Internet, or upload a new one
     /// using multipart/form-data. More info on Sending Files »
     pub audio: String,
-    /// Audio caption, 0-200 characters
+    /// Audio caption, 0-1024 characters
     pub caption: Option<String>,
     /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
     /// fixed-width text or inline URLs in the media caption.
@@ -2234,11 +2378,12 @@ pub struct SendAudio {
     pub performer: Option<String>,
     /// Track name
     pub title: Option<String>,
-    /// Thumbnail of the file sent. The thumbnail should be in JPEG format and less
-    /// than 200 kB in size. A thumbnail‘s width and height should not exceed 90.
-    /// Ignored if the file is not uploaded using multipart/form-data. Thumbnails
-    /// can’t be reused and can be only uploaded as a new file, so you can pass
-    /// “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// Thumbnail of the file sent; can be ignored if thumbnail generation for the
+    /// file is supported server-side. The thumbnail should be in JPEG format and
+    /// less than 200 kB in size. A thumbnail‘s width and height should not exceed
+    /// 320. Ignored if the file is not uploaded using multipart/form-data.
+    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
+    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
     /// multipart/form-data under <file_attach_name>. More info on Sending Files »
     pub thumb: Option<String>,
     /// Sends the message silently. Users will receive a notification with no sound.
@@ -2264,15 +2409,16 @@ pub struct SendDocument {
     /// get a file from the Internet, or upload a new one using multipart/form-data.
     /// More info on Sending Files »
     pub document: String,
-    /// Thumbnail of the file sent. The thumbnail should be in JPEG format and less
-    /// than 200 kB in size. A thumbnail‘s width and height should not exceed 90.
-    /// Ignored if the file is not uploaded using multipart/form-data. Thumbnails
-    /// can’t be reused and can be only uploaded as a new file, so you can pass
-    /// “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// Thumbnail of the file sent; can be ignored if thumbnail generation for the
+    /// file is supported server-side. The thumbnail should be in JPEG format and
+    /// less than 200 kB in size. A thumbnail‘s width and height should not exceed
+    /// 320. Ignored if the file is not uploaded using multipart/form-data.
+    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
+    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
     /// multipart/form-data under <file_attach_name>. More info on Sending Files »
     pub thumb: Option<String>,
     /// Document caption (may also be used when resending documents by file_id),
-    /// 0-200 characters
+    /// 0-1024 characters
     pub caption: Option<String>,
     /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
     /// fixed-width text or inline URLs in the media caption.
@@ -2307,14 +2453,15 @@ pub struct SendVideo {
     pub width: Option<i64>,
     /// Video height
     pub height: Option<i64>,
-    /// Thumbnail of the file sent. The thumbnail should be in JPEG format and less
-    /// than 200 kB in size. A thumbnail‘s width and height should not exceed 90.
-    /// Ignored if the file is not uploaded using multipart/form-data. Thumbnails
-    /// can’t be reused and can be only uploaded as a new file, so you can pass
-    /// “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// Thumbnail of the file sent; can be ignored if thumbnail generation for the
+    /// file is supported server-side. The thumbnail should be in JPEG format and
+    /// less than 200 kB in size. A thumbnail‘s width and height should not exceed
+    /// 320. Ignored if the file is not uploaded using multipart/form-data.
+    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
+    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
     /// multipart/form-data under <file_attach_name>. More info on Sending Files »
     pub thumb: Option<String>,
-    /// Video caption (may also be used when resending videos by file_id), 0-200
+    /// Video caption (may also be used when resending videos by file_id), 0-1024
     /// characters
     pub caption: Option<String>,
     /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
@@ -2351,15 +2498,16 @@ pub struct SendAnimation {
     pub width: Option<i64>,
     /// Animation height
     pub height: Option<i64>,
-    /// Thumbnail of the file sent. The thumbnail should be in JPEG format and less
-    /// than 200 kB in size. A thumbnail‘s width and height should not exceed 90.
-    /// Ignored if the file is not uploaded using multipart/form-data. Thumbnails
-    /// can’t be reused and can be only uploaded as a new file, so you can pass
-    /// “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// Thumbnail of the file sent; can be ignored if thumbnail generation for the
+    /// file is supported server-side. The thumbnail should be in JPEG format and
+    /// less than 200 kB in size. A thumbnail‘s width and height should not exceed
+    /// 320. Ignored if the file is not uploaded using multipart/form-data.
+    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
+    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
     /// multipart/form-data under <file_attach_name>. More info on Sending Files »
     pub thumb: Option<String>,
     /// Animation caption (may also be used when resending animation by file_id),
-    /// 0-200 characters
+    /// 0-1024 characters
     pub caption: Option<String>,
     /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
     /// fixed-width text or inline URLs in the media caption.
@@ -2389,7 +2537,7 @@ pub struct SendVoice {
     /// Telegram to get a file from the Internet, or upload a new one using
     /// multipart/form-data. More info on Sending Files »
     pub voice: String,
-    /// Voice message caption, 0-200 characters
+    /// Voice message caption, 0-1024 characters
     pub caption: Option<String>,
     /// Send Markdown or HTML, if you want Telegram apps to show bold, italic,
     /// fixed-width text or inline URLs in the media caption.
@@ -2421,13 +2569,14 @@ pub struct SendVideoNote {
     pub video_note: String,
     /// Duration of sent video in seconds
     pub duration: Option<i64>,
-    /// Video width and height
+    /// Video width and height, i.e. diameter of the video message
     pub length: Option<i64>,
-    /// Thumbnail of the file sent. The thumbnail should be in JPEG format and less
-    /// than 200 kB in size. A thumbnail‘s width and height should not exceed 90.
-    /// Ignored if the file is not uploaded using multipart/form-data. Thumbnails
-    /// can’t be reused and can be only uploaded as a new file, so you can pass
-    /// “attach://<file_attach_name>” if the thumbnail was uploaded using
+    /// Thumbnail of the file sent; can be ignored if thumbnail generation for the
+    /// file is supported server-side. The thumbnail should be in JPEG format and
+    /// less than 200 kB in size. A thumbnail‘s width and height should not exceed
+    /// 320. Ignored if the file is not uploaded using multipart/form-data.
+    /// Thumbnails can’t be reused and can be only uploaded as a new file, so you
+    /// can pass “attach://<file_attach_name>” if the thumbnail was uploaded using
     /// multipart/form-data under <file_attach_name>. More info on Sending Files »
     pub thumb: Option<String>,
     /// Sends the message silently. Users will receive a notification with no sound.
@@ -2481,19 +2630,18 @@ pub struct SendLocation {
     pub reply_markup: Option<PolymorphReplyMarkup>,
 }
 
-/// Use this method to edit live location messages sent by the bot or via the bot
-/// (for inline bots). A location can be edited until its live_period expires or
-/// editing is explicitly disabled by a call to stopMessageLiveLocation. On success,
-/// if the edited message was sent by the bot, the edited Message is returned,
-/// otherwise True is returned.
+/// Use this method to edit live location messages. A location can be edited until
+/// its live_period expires or editing is explicitly disabled by a call to
+/// stopMessageLiveLocation. On success, if the edited message was sent by the bot,
+/// the edited Message is returned, otherwise True is returned.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct EditMessageLiveLocation {
     /// Required if inline_message_id is not specified. Unique identifier for the
     /// target chat or username of the target channel (in the format
     /// @channelusername)
     pub chat_id: Option<PolymorphChatId>,
-    /// Required if inline_message_id is not specified. Identifier of the sent
-    /// message
+    /// Required if inline_message_id is not specified. Identifier of the message to
+    /// edit
     pub message_id: Option<i64>,
     /// Required if chat_id and message_id are not specified. Identifier of the
     /// inline message
@@ -2506,17 +2654,17 @@ pub struct EditMessageLiveLocation {
     pub reply_markup: Option<InlineKeyboardMarkup>,
 }
 
-/// Use this method to stop updating a live location message sent by the bot or via
-/// the bot (for inline bots) before live_period expires. On success, if the message
-/// was sent by the bot, the sent Message is returned, otherwise True is returned.
+/// Use this method to stop updating a live location message before live_period
+/// expires. On success, if the message was sent by the bot, the sent Message is
+/// returned, otherwise True is returned.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct StopMessageLiveLocation {
     /// Required if inline_message_id is not specified. Unique identifier for the
     /// target chat or username of the target channel (in the format
     /// @channelusername)
     pub chat_id: Option<PolymorphChatId>,
-    /// Required if inline_message_id is not specified. Identifier of the sent
-    /// message
+    /// Required if inline_message_id is not specified. Identifier of the message
+    /// with live location to stop
     pub message_id: Option<i64>,
     /// Required if chat_id and message_id are not specified. Identifier of the
     /// inline message
@@ -2578,6 +2726,27 @@ pub struct SendContact {
     /// Additional interface options. A JSON-serialized object for an inline
     /// keyboard, custom reply keyboard, instructions to remove keyboard or to force
     /// a reply from the user.
+    pub reply_markup: Option<PolymorphReplyMarkup>,
+}
+
+/// Use this method to send a native poll. A native poll can't be sent to a private
+/// chat. On success, the sent Message is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct SendPoll {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername). A native poll can't be sent to a private chat.
+    pub chat_id: PolymorphChatId,
+    /// Poll question, 1-255 characters
+    pub question: String,
+    /// List of answer options, 2-10 strings 1-100 characters each
+    pub options: Vec<String>,
+    /// Sends the message silently. Users will receive a notification with no sound.
+    pub disable_notification: Option<bool>,
+    /// If the message is a reply, ID of the original message
+    pub reply_to_message_id: Option<i64>,
+    /// Additional interface options. A JSON-serialized object for an inline
+    /// keyboard, custom reply keyboard, instructions to remove reply keyboard or to
+    /// force a reply from the user.
     pub reply_markup: Option<PolymorphReplyMarkup>,
 }
 
@@ -2775,8 +2944,8 @@ pub struct SetChatDescription {
     pub description: Option<String>,
 }
 
-/// Use this method to pin a message in a supergroup or a channel. The bot must be
-/// an administrator in the chat for this to work and must have the
+/// Use this method to pin a message in a group, a supergroup, or a channel. The bot
+/// must be an administrator in the chat for this to work and must have the
 /// ‘can_pin_messages’ admin right in the supergroup or ‘can_edit_messages’ admin
 /// right in the channel. Returns True on success.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -2791,8 +2960,8 @@ pub struct PinChatMessage {
     pub disable_notification: Option<bool>,
 }
 
-/// Use this method to unpin a message in a supergroup or a channel. The bot must be
-/// an administrator in the chat for this to work and must have the
+/// Use this method to unpin a message in a group, a supergroup, or a channel. The
+/// bot must be an administrator in the chat for this to work and must have the
 /// ‘can_pin_messages’ admin right in the supergroup or ‘can_edit_messages’ admin
 /// right in the channel. Returns True on success.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -2900,17 +3069,16 @@ pub struct AnswerCallbackQuery {
     pub cache_time: Option<i64>,
 }
 
-/// Use this method to edit text and game messages sent by the bot or via the bot
-/// (for inline bots). On success, if edited message is sent by the bot, the edited
-/// Message is returned, otherwise True is returned.
+/// Use this method to edit text and game messages. On success, if edited message is
+/// sent by the bot, the edited Message is returned, otherwise True is returned.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct EditMessageText {
     /// Required if inline_message_id is not specified. Unique identifier for the
     /// target chat or username of the target channel (in the format
     /// @channelusername)
     pub chat_id: Option<PolymorphChatId>,
-    /// Required if inline_message_id is not specified. Identifier of the sent
-    /// message
+    /// Required if inline_message_id is not specified. Identifier of the message to
+    /// edit
     pub message_id: Option<i64>,
     /// Required if chat_id and message_id are not specified. Identifier of the
     /// inline message
@@ -2926,17 +3094,16 @@ pub struct EditMessageText {
     pub reply_markup: Option<InlineKeyboardMarkup>,
 }
 
-/// Use this method to edit captions of messages sent by the bot or via the bot (for
-/// inline bots). On success, if edited message is sent by the bot, the edited
-/// Message is returned, otherwise True is returned.
+/// Use this method to edit captions of messages. On success, if edited message is
+/// sent by the bot, the edited Message is returned, otherwise True is returned.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct EditMessageCaption {
     /// Required if inline_message_id is not specified. Unique identifier for the
     /// target chat or username of the target channel (in the format
     /// @channelusername)
     pub chat_id: Option<PolymorphChatId>,
-    /// Required if inline_message_id is not specified. Identifier of the sent
-    /// message
+    /// Required if inline_message_id is not specified. Identifier of the message to
+    /// edit
     pub message_id: Option<i64>,
     /// Required if chat_id and message_id are not specified. Identifier of the
     /// inline message
@@ -2950,20 +3117,20 @@ pub struct EditMessageCaption {
     pub reply_markup: Option<InlineKeyboardMarkup>,
 }
 
-/// Use this method to edit audio, document, photo, or video messages. If a message
-/// is a part of a message album, then it can be edited only to a photo or a video.
-/// Otherwise, message type can be changed arbitrarily. When inline message is
-/// edited, new file can't be uploaded. Use previously uploaded file via its file_id
-/// or specify a URL. On success, if the edited message was sent by the bot, the
-/// edited Message is returned, otherwise True is returned.
+/// Use this method to edit animation, audio, document, photo, or video messages. If
+/// a message is a part of a message album, then it can be edited only to a photo or
+/// a video. Otherwise, message type can be changed arbitrarily. When inline message
+/// is edited, new file can't be uploaded. Use previously uploaded file via its
+/// file_id or specify a URL. On success, if the edited message was sent by the bot,
+/// the edited Message is returned, otherwise True is returned.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct EditMessageMedia {
     /// Required if inline_message_id is not specified. Unique identifier for the
     /// target chat or username of the target channel (in the format
     /// @channelusername)
     pub chat_id: Option<PolymorphChatId>,
-    /// Required if inline_message_id is not specified. Identifier of the sent
-    /// message
+    /// Required if inline_message_id is not specified. Identifier of the message to
+    /// edit
     pub message_id: Option<i64>,
     /// Required if chat_id and message_id are not specified. Identifier of the
     /// inline message
@@ -2974,17 +3141,17 @@ pub struct EditMessageMedia {
     pub reply_markup: Option<InlineKeyboardMarkup>,
 }
 
-/// Use this method to edit only the reply markup of messages sent by the bot or via
-/// the bot (for inline bots).  On success, if edited message is sent by the bot,
-/// the edited Message is returned, otherwise True is returned.
+/// Use this method to edit only the reply markup of messages. On success, if edited
+/// message is sent by the bot, the edited Message is returned, otherwise True is
+/// returned.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct EditMessageReplyMarkup {
     /// Required if inline_message_id is not specified. Unique identifier for the
     /// target chat or username of the target channel (in the format
     /// @channelusername)
     pub chat_id: Option<PolymorphChatId>,
-    /// Required if inline_message_id is not specified. Identifier of the sent
-    /// message
+    /// Required if inline_message_id is not specified. Identifier of the message to
+    /// edit
     pub message_id: Option<i64>,
     /// Required if chat_id and message_id are not specified. Identifier of the
     /// inline message
@@ -2993,13 +3160,27 @@ pub struct EditMessageReplyMarkup {
     pub reply_markup: Option<InlineKeyboardMarkup>,
 }
 
+/// Use this method to stop a poll which was sent by the bot. On success, the
+/// stopped Poll with the final results is returned.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct StopPoll {
+    /// Unique identifier for the target chat or username of the target channel (in
+    /// the format @channelusername)
+    pub chat_id: PolymorphChatId,
+    /// Identifier of the original message with the poll
+    pub message_id: i64,
+    /// A JSON-serialized object for a new message inline keyboard.
+    pub reply_markup: Option<InlineKeyboardMarkup>,
+}
+
 /// Use this method to delete a message, including service messages, with the
 /// following limitations:- A message can only be deleted if it was sent less than
-/// 48 hours ago.- Bots can delete outgoing messages in groups and supergroups.-
-/// Bots granted can_post_messages permissions can delete outgoing messages in
-/// channels.- If the bot is an administrator of a group, it can delete any message
-/// there.- If the bot has can_delete_messages permission in a supergroup or a
-/// channel, it can delete any message there.Returns True on success.
+/// 48 hours ago.- Bots can delete outgoing messages in private chats, groups, and
+/// supergroups.- Bots can delete incoming messages in private chats.- Bots granted
+/// can_post_messages permissions can delete outgoing messages in channels.- If the
+/// bot is an administrator of a group, it can delete any message there.- If the bot
+/// has can_delete_messages permission in a supergroup or a channel, it can delete
+/// any message there.Returns True on success.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct DeleteMessage {
     /// Unique identifier for the target chat or username of the target channel (in
